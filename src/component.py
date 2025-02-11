@@ -2,86 +2,93 @@
 Template Component main class.
 
 """
-import csv
-from datetime import datetime
-import logging
 
+import logging
+import os
+
+import duckdb
+from deltalake import write_deltalake
+from duckdb.duckdb import DuckDBPyConnection
 from keboola.component.base import ComponentBase
 from keboola.component.exceptions import UserException
 
 from configuration import Configuration
 
+DUCK_DB_DIR = os.path.join(os.environ.get("TMPDIR", "/tmp"), "duckdb")
+
 
 class Component(ComponentBase):
-    """
-        Extends base class for general Python components. Initializes the CommonInterface
-        and performs configuration validation.
-
-        For easier debugging the data folder is picked up by default from `../data` path,
-        relative to working directory.
-
-        If `debug` parameter is present in the `config.json`, the default logger is set to verbose DEBUG mode.
-    """
-
     def __init__(self):
         super().__init__()
+        self.params = Configuration(**self.configuration.parameters)
+        self._connection = self.init_connection()
 
     def run(self):
         """
         Main execution code
         """
 
-        # ####### EXAMPLE TO REMOVE
-        # check for missing configuration parameters
-        params = Configuration(**self.configuration.parameters)
+        tables = self.get_input_tables_definitions()
+        files = self.get_input_files_definitions()
 
-        # Access parameters in configuration
-        if params.print_hello:
-            logging.info("Hello World")
+        if (tables and files) or (not tables and not files):
+            raise Exception("Each configuration row can be mapped to either a file or a table, but not both.")
 
-        # get input table definitions
-        input_tables = self.get_input_tables_definitions()
-        for table in input_tables:
-            logging.info(f'Received input table: {table.name} with path: {table.full_path}')
+        if len(tables) > 1:
+            raise UserException("Each configuration row can have only one input table")
 
-        if len(input_tables) == 0:
-            raise UserException("No input tables found")
+        relation = None
+        if tables:
+            table = tables[0]
+            if table.is_sliced:
+                path = f"{table.full_path}/*.csv"
+            else:
+                path = table.full_path
 
-        # get last state data/in/state.json from previous run
-        previous_state = self.get_state_file()
-        logging.info(previous_state.get('some_parameter'))
+            dtypes = {key: value.data_types.get("base").dtype for key, value in table.schema.items()}
+            relation = self._connection.read_csv(path, dtype=dtypes)
 
-        # Create output table (Table definition - just metadata)
-        table = self.create_out_table_definition('output.csv', incremental=True, primary_key=['timestamp'])
+        if files:
+            files_paths = [file.full_path for file in files]
+            relation = self._connection.read_parquet(files_paths)
 
-        # get file path of the table (data/out/tables/Features.csv)
-        out_table_path = table.full_path
-        logging.info(out_table_path)
+        arrow_batches = relation.fetch_arrow_reader(batch_size=1000)
 
-        # Add timestamp column and save into out_table_path
-        input_table = input_tables[0]
-        with (open(input_table.full_path, 'r') as inp_file,
-              open(table.full_path, mode='wt', encoding='utf-8', newline='') as out_file):
-            reader = csv.DictReader(inp_file)
+        storage_options = {
+            "azure_storage_account_name": self.params.account_name,
+            "azure_storage_sas_token": self.params.sas_token,
+        }
 
-            columns = list(reader.fieldnames)
-            # append timestamp
-            columns.append('timestamp')
+        uri = f"az://{self.params.destination.container_name}/{self.params.destination.blob_name}"
 
-            # write result with column added
-            writer = csv.DictWriter(out_file, fieldnames=columns)
-            writer.writeheader()
-            for in_row in reader:
-                in_row['timestamp'] = datetime.now().isoformat()
-                writer.writerow(in_row)
+        write_deltalake(
+            table_or_uri=uri,
+            data=arrow_batches,
+            storage_options=storage_options,
+            partition_by=self.params.destination.partition_by,
+            mode=self.params.destination.mode.value,
+        )
 
-        # Save table manifest (output.csv.manifest) from the Table definition
-        self.write_manifest(table)
+        self._connection.close()
 
-        # Write new state - will be available next run
-        self.write_state_file({"some_state_parameter": "value"})
+    def init_connection(self) -> DuckDBPyConnection:
+        """
+        Returns connection to temporary DuckDB database
+        """
+        os.makedirs(DUCK_DB_DIR, exist_ok=True)
+        # TODO: On GCP consider changin tmp to /opt/tmp
+        config = dict(
+            temp_directory=DUCK_DB_DIR,
+            extension_directory=os.path.join(DUCK_DB_DIR, "extensions"),
+            threads=self.params.threads,
+            max_memory=f"{self.params.max_memory}MB",
+        )
+        conn = duckdb.connect(config=config)
 
-        # ####### EXAMPLE TO REMOVE END
+        if not self.params.preserve_insertion_order:
+            conn.execute("SET preserve_insertion_order = false;").fetchall()
+
+        return conn
 
 
 """

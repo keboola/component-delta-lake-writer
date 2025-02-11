@@ -1,12 +1,32 @@
 import logging
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from enum import Enum
+from pydantic import BaseModel, Field, ValidationError
 from keboola.component.exceptions import UserException
 
 
+class LoadType(str, Enum):
+    error = "error"
+    append = "append"
+    overwrite = "overwrite"
+    ignore = "ignore"
+
+
+class Destination(BaseModel):
+    container_name: str = Field()
+    blob_name: str = Field()
+    mode: LoadType = Field(default=LoadType.append)
+    partition_by: list[str] = Field(default_factory=list)
+
+
 class Configuration(BaseModel):
-    print_hello: bool
-    api_token: str = Field(alias="#api_token")
+    account_name: str
+    sas_token: str = Field(alias="#sas_token")
+    destination: Destination
+    batch_size: int = 10_000
+    preserve_insertion_order: bool = True
     debug: bool = False
+    threads: int = 1
+    max_memory: int = 256
 
     def __init__(self, **data):
         try:
@@ -17,9 +37,3 @@ class Configuration(BaseModel):
 
         if self.debug:
             logging.debug("Component will run in Debug mode")
-
-    @field_validator('api_token')
-    def token_must_be_uppercase(cls, v):
-        if not v.isupper():
-            raise UserException('API token must be uppercase')
-        return v

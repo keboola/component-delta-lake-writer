@@ -1,1 +1,89 @@
-{}
+{
+  "type": "object",
+  "title": "Component configuration",
+  "required": [
+    "destination",
+    "preserve_insertion_order",
+    "debug"
+  ],
+  "properties": {
+    "destination": {
+      "type": "object",
+      "title": "Data Destination",
+      "required": [
+        "container_name",
+        "blob_name"
+      ],
+      "properties": {
+        "container_name": {
+          "type": "string",
+          "title": "Container name",
+          "propertyOrder": 1
+        },
+        "blob_name": {
+          "type": "string",
+          "title": "Blob name",
+          "propertyOrder": 2
+        },
+        "mode": {
+          "enum": [
+            "error",
+            "append",
+            "overwrite",
+            "ignore"
+          ],
+          "type": "string",
+          "title": "Load Type",
+          "default": "append",
+          "options": {
+            "enum_titles": [
+              "Raise error if existing",
+              "Append",
+              "Overwrite",
+              "Ignore"
+            ]
+          },
+          "propertyOrder": 3
+        },
+        "partition_by": {
+          "type": "array",
+          "items": {
+            "enum": [],
+            "type": "string"
+          },
+          "title": "Partition table by",
+          "format": "select",
+          "options": {
+            "tags": true
+          },
+          "uniqueItems": true,
+          "propertyOrder": 4
+        }
+      },
+      "propertyOrder": 1
+    },
+    "batch_size": {
+      "type": "integer",
+      "title": "Batch size",
+      "default": 10000,
+      "propertyOrder": 2,
+      "description": "By default, the extractor will load data in batches of 10000 rows. You can adjust this value to optimize the performance (or solve OOM) of the writer."
+    },
+    "preserve_insertion_order": {
+      "type": "boolean",
+      "title": "Preserve insertion order",
+      "format": "checkbox",
+      "default": true,
+      "description": "If enabled, the writer will preserve the order of the rows in the destination table, when encountering OOM error, disabling this option may help",
+      "propertyOrder": 3
+    },
+    "debug": {
+      "type": "boolean",
+      "title": "Debug mode",
+      "format": "checkbox",
+      "default": false,
+      "description": "If enabled, the component will produce detailed logs",
+      "propertyOrder": 4
+    }
+  }
+}

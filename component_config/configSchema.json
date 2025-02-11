@@ -1,18 +1,20 @@
 {
   "type": "object",
-  "title": "extractor configuration",
+  "title": "Authorization",
   "required": [
-    "print_hello"
+    "account_name",
+    "#sas_token"
   ],
   "properties": {
-    "print_hello": {
-      "type": "boolean",
-      "title": "Print Hello",
+    "account_name": {
+      "type": "string",
+      "title": "Storage Account Name",
       "propertyOrder": 1
     },
-    "debug": {
-      "type": "boolean",
-      "title": "Debug",
+    "#sas_token": {
+      "type": "string",
+      "title": "SAS token",
+      "format": "password",
       "propertyOrder": 2
     }
   }
