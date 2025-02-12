@@ -7,7 +7,7 @@ import logging
 import os
 
 import duckdb
-from deltalake import write_deltalake
+from deltalake import write_deltalake, WriterProperties
 from duckdb.duckdb import DuckDBPyConnection
 from keboola.component.base import ComponentBase
 from keboola.component.exceptions import UserException
@@ -52,14 +52,23 @@ class Component(ComponentBase):
             files_paths = [file.full_path for file in files]
             relation = self._connection.read_parquet(files_paths)
 
-        arrow_batches = relation.fetch_arrow_reader(batch_size=1000)
+        arrow_batches = relation.fetch_arrow_reader(batch_size=self.params.batch_size)
 
         storage_options = {
             "azure_storage_account_name": self.params.account_name,
             "azure_storage_sas_token": self.params.sas_token,
+            "timeout": "55s",
+            "max_retries": "1",
         }
 
         uri = f"az://{self.params.destination.container_name}/{self.params.destination.blob_name}"
+
+        writer_properties = WriterProperties(
+            write_batch_size=10000,
+            # data_page_size_limit=8 * 1024 * 1024,
+            # dictionary_page_size_limit=8 * 1024 * 1024,
+        )
+
 
         write_deltalake(
             table_or_uri=uri,
@@ -67,6 +76,8 @@ class Component(ComponentBase):
             storage_options=storage_options,
             partition_by=self.params.destination.partition_by,
             mode=self.params.destination.mode.value,
+            writer_properties=writer_properties,
+            # target_file_size=64 * 1024 * 1024,
         )
 
         self._connection.close()
