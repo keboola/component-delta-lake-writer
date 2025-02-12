@@ -69,7 +69,6 @@ class Component(ComponentBase):
             # dictionary_page_size_limit=8 * 1024 * 1024,
         )
 
-
         write_deltalake(
             table_or_uri=uri,
             data=arrow_batches,
