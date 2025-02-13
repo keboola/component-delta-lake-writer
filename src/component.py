@@ -5,7 +5,7 @@ Template Component main class.
 
 import logging
 import os
-
+import time
 import duckdb
 from deltalake import write_deltalake, WriterProperties
 from duckdb.duckdb import DuckDBPyConnection
@@ -52,34 +52,46 @@ class Component(ComponentBase):
             files_paths = [file.full_path for file in files]
             relation = self._connection.read_parquet(files_paths)
 
-        arrow_batches = relation.fetch_arrow_reader(batch_size=self.params.batch_size)
+        batches = relation.fetch_arrow_reader(batch_size=self.params.batch_size)
 
         storage_options = {
             "azure_storage_account_name": self.params.account_name,
             "azure_storage_sas_token": self.params.sas_token,
-            "timeout": "55s",
-            "max_retries": "1",
+            "timeout": "3600s",
+            "max_retries": "2"
         }
 
         uri = f"az://{self.params.destination.container_name}/{self.params.destination.blob_name}"
 
         writer_properties = WriterProperties(
-            write_batch_size=10000,
-            # data_page_size_limit=8 * 1024 * 1024,
-            # dictionary_page_size_limit=8 * 1024 * 1024,
+            write_batch_size=10,
+            data_page_size_limit=8 * 1024 * 1024,
+            dictionary_page_size_limit=8 * 1024 * 1024,
         )
 
-        write_deltalake(
-            table_or_uri=uri,
-            data=arrow_batches,
-            storage_options=storage_options,
-            partition_by=self.params.destination.partition_by,
-            mode=self.params.destination.mode.value,
-            writer_properties=writer_properties,
-            # target_file_size=64 * 1024 * 1024,
-        )
+        line = self.params.batch_size
+        logging.info(f"Writing records {line} - {line + self.params.batch_size}")
+        self.write_batch(uri, next(batches), self.params.destination.mode.value, storage_options, writer_properties)
+        line += self.params.batch_size
+
+        for batch in batches:
+            logging.info(f"Writing records {line} - {line + self.params.batch_size}")
+            self.write_batch(uri, batch, "append", storage_options, writer_properties)
+            line += self.params.batch_size
 
         self._connection.close()
+
+    @staticmethod
+    def write_batch(table_or_uri, data, mode, storage_options, writer_properties):
+        start = time.time()
+        write_deltalake(
+            table_or_uri=table_or_uri,
+            data=data,
+            mode=mode,
+            storage_options=storage_options,
+            writer_properties=writer_properties
+            )
+        logging.info(f"Batch written in {time.time() - start:.2f}s")
 
     def init_connection(self) -> DuckDBPyConnection:
         """

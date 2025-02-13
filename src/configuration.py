@@ -22,7 +22,7 @@ class Configuration(BaseModel):
     account_name: str
     sas_token: str = Field(alias="#sas_token")
     destination: Destination
-    batch_size: int = 10_000
+    batch_size: int = 100_000
     preserve_insertion_order: bool = True
     debug: bool = False
     threads: int = 1
