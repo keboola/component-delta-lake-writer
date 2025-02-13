@@ -58,7 +58,7 @@ class Component(ComponentBase):
             "azure_storage_account_name": self.params.account_name,
             "azure_storage_sas_token": self.params.sas_token,
             "timeout": "3600s",
-            "max_retries": "2"
+            "max_retries": "2",
         }
 
         uri = f"az://{self.params.destination.container_name}/{self.params.destination.blob_name}"
@@ -71,26 +71,41 @@ class Component(ComponentBase):
 
         line = self.params.batch_size
         logging.info(f"Writing records {line} - {line + self.params.batch_size}")
-        self.write_batch(uri, next(batches), self.params.destination.mode.value, storage_options, writer_properties)
+        self.write_batch(
+            uri,
+            next(batches),
+            self.params.destination.mode.value,
+            storage_options,
+            writer_properties,
+            self.params.destination.partition_by,
+        )
         line += self.params.batch_size
 
         for batch in batches:
             logging.info(f"Writing records {line} - {line + self.params.batch_size}")
-            self.write_batch(uri, batch, "append", storage_options, writer_properties)
+            self.write_batch(
+                uri,
+                batch,
+                "append",
+                storage_options,
+                writer_properties,
+                self.params.destination.partition_by,
+            )
             line += self.params.batch_size
 
         self._connection.close()
 
     @staticmethod
-    def write_batch(table_or_uri, data, mode, storage_options, writer_properties):
+    def write_batch(table_or_uri, data, mode, storage_options, writer_properties, partition_by=None):
         start = time.time()
         write_deltalake(
             table_or_uri=table_or_uri,
             data=data,
             mode=mode,
             storage_options=storage_options,
-            writer_properties=writer_properties
-            )
+            writer_properties=writer_properties,
+            partition_by=partition_by,
+        )
         logging.info(f"Batch written in {time.time() - start:.2f}s")
 
     def init_connection(self) -> DuckDBPyConnection:

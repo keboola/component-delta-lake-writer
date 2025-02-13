@@ -67,7 +67,7 @@
       "title": "Batch size",
       "default": 10000,
       "propertyOrder": 2,
-      "description": "By default, the extractor will load data in batches of 10000 rows. You can adjust this value to optimize the performance (or solve OOM) of the writer."
+      "description": "By default, the extractor will load data in batches of 100 000 rows. You can adjust this value to optimize the performance (or solve OOM) of the writer."
     },
     "preserve_insertion_order": {
       "type": "boolean",
