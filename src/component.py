@@ -81,7 +81,6 @@ class Component(ComponentBase):
         else:
             raise UserException(f"Unknown provider: {self.params.provider}")
 
-
         writer_properties = WriterProperties(data_page_size_limit=8 * 1024 * 1024)
 
         line = self.params.batch_size
