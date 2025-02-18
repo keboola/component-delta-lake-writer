@@ -29,8 +29,7 @@
           "enum": [
             "error",
             "append",
-            "overwrite",
-            "ignore"
+            "overwrite"
           ],
           "type": "string",
           "title": "Load Type",
@@ -39,8 +38,7 @@
             "enum_titles": [
               "Raise error if existing",
               "Append",
-              "Overwrite",
-              "Ignore"
+              "Overwrite"
             ]
           },
           "propertyOrder": 3
@@ -58,6 +56,33 @@
           },
           "uniqueItems": true,
           "propertyOrder": 4
+        },
+        "compression": {
+          "enum": [
+            "UNCOMPRESSED",
+            "SNAPPY",
+            "GZIP",
+            "BROTLI",
+            "LZ4",
+            "ZSTD",
+            "LZ4_RAW"
+          ],
+          "type": "string",
+          "title": "Compression",
+          "default": "UNCOMPRESSED",
+          "options": {
+            "enum_titles": [
+              "UNCOMPRESSED",
+              "SNAPPY",
+              "GZIP",
+              "BROTLI",
+              "LZ4",
+              "ZSTD",
+              "LZ4_RAW"
+            ]
+          },
+          "required": true,
+          "propertyOrder": 5
         }
       },
       "propertyOrder": 1
