@@ -8,7 +8,6 @@ class LoadType(str, Enum):
     error = "error"
     append = "append"
     overwrite = "overwrite"
-    ignore = "ignore"
 
 
 class Destination(BaseModel):
@@ -16,6 +15,7 @@ class Destination(BaseModel):
     blob_name: str = Field()
     mode: LoadType = Field(default=LoadType.append)
     partition_by: list[str] = Field(default_factory=list)
+    compression: str = "UNCOMPRESSED"
 
 
 class Configuration(BaseModel):
