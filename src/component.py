@@ -54,7 +54,6 @@ class Component(ComponentBase):
 
         batches = relation.fetch_arrow_reader(batch_size=self.params.batch_size)
 
-        uri = None
         storage_options = {
             "timeout": "3600s",
             "max_retries": "2",
@@ -79,12 +78,11 @@ class Component(ComponentBase):
             uri = f"gs://{self.params.destination.container_name}/{self.params.destination.blob_name}"
             storage_options |= {"google_service_account_key": self.params.gcp_service_account_key}
 
+        else:
+            raise UserException(f"Unknown provider: {self.params.provider}")
 
-        writer_properties = WriterProperties(
-            write_batch_size=10,
-            data_page_size_limit=8 * 1024 * 1024,
-            dictionary_page_size_limit=8 * 1024 * 1024,
-        )
+
+        writer_properties = WriterProperties(data_page_size_limit=8 * 1024 * 1024)
 
         line = self.params.batch_size
         logging.info(f"Writing records {line} - {line + self.params.batch_size}")
