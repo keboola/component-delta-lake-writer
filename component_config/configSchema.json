@@ -2,20 +2,93 @@
   "type": "object",
   "title": "Authorization",
   "required": [
-    "account_name",
-    "#sas_token"
+    "provider"
   ],
   "properties": {
-    "account_name": {
+    "provider": {
+      "enum": [
+        "s3",
+        "abs",
+        "gcs"
+      ],
       "type": "string",
-      "title": "Storage Account Name",
+      "title": "Cloud Storage",
+      "default": "full_sync",
+      "options": {
+        "enum_titles": [
+          "AWS S3",
+          "Azure Blob Storage",
+          "Google Cloud Storage"
+        ]
+      },
+      "required": true,
+      "description": "Select the cloud storage provider.",
       "propertyOrder": 1
     },
-    "#sas_token": {
+    "abs_account_name": {
+      "type": "string",
+      "title": "Storage Account Name",
+      "propertyOrder": 2,
+      "options": {
+        "dependencies": {
+          "provider": "abs"
+        }
+      }
+    },
+    "#abs_sas_token": {
       "type": "string",
       "title": "SAS token",
       "format": "password",
-      "propertyOrder": 2
+      "propertyOrder": 3,
+      "options": {
+        "dependencies": {
+          "provider": "abs"
+        }
+      }
+    },
+    "aws_region": {
+      "type": "string",
+      "title": "AWS Region",
+      "description": "The AWS region where the bucket is located for example 'eu-central-1' or 'us-east-1'.",
+      "propertyOrder": 4,
+      "options": {
+        "dependencies": {
+          "provider": "s3"
+        }
+      }
+    },
+    "aws_key_id": {
+      "type": "string",
+      "title": "Access key ID",
+      "propertyOrder": 5,
+      "options": {
+        "dependencies": {
+          "provider": "s3"
+        }
+      }
+    },
+    "#aws_key_secret": {
+      "type": "string",
+      "title": "Secret Access Key",
+      "format": "password",
+      "propertyOrder": 6,
+      "options": {
+        "dependencies": {
+          "provider": "s3"
+        }
+      }
+    },
+    "#gcp_service_account_key": {
+      "type": "string",
+      "title": "Service Account Key",
+      "description": "Copy & paste the whole JSON of the Google service account key file. For instructions on how to create the service account, see the <a href=\"https://help.keboola.com/components/writers/database/bigquery/#create-service-account\"> documentation.</a>",
+      "format": "password",
+      "propertyOrder": 7,
+      "options": {
+        "dependencies": {
+          "provider": "gcs"
+        }
+      }
     }
   }
 }

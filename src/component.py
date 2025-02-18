@@ -54,14 +54,31 @@ class Component(ComponentBase):
 
         batches = relation.fetch_arrow_reader(batch_size=self.params.batch_size)
 
+        uri = None
         storage_options = {
-            "azure_storage_account_name": self.params.account_name,
-            "azure_storage_sas_token": self.params.sas_token,
             "timeout": "3600s",
             "max_retries": "2",
         }
 
-        uri = f"az://{self.params.destination.container_name}/{self.params.destination.blob_name}"
+        if self.params.provider == "abs":
+            uri = f"az://{self.params.destination.container_name}/{self.params.destination.blob_name}"
+            storage_options |= {
+                "azure_storage_account_name": self.params.abs_account_name,
+                "azure_storage_sas_token": self.params.abs_sas_token,
+            }
+
+        elif self.params.provider == "s3":
+            uri = f"s3://{self.params.destination.container_name}/{self.params.destination.blob_name}"
+            storage_options |= {
+                "aws_region": self.params.aws_region,
+                "aws_access_key_id": self.params.aws_key_id,
+                "aws_secret_access_key": self.params.aws_key_secret,
+            }
+
+        elif self.params.provider == "gcs":
+            uri = f"gs://{self.params.destination.container_name}/{self.params.destination.blob_name}"
+            storage_options |= {"google_service_account_key": self.params.gcp_service_account_key}
+
 
         writer_properties = WriterProperties(
             write_batch_size=10,
