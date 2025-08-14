@@ -52,6 +52,10 @@ class Component(ComponentBase):
             self.write_native_table(self.params.destination)
 
     def write_external_table(self, files, tables):
+        if self.params.destination.mode.value not in ["error", "append", "overwrite"]:
+            raise UserException(f"Unsupported mode: {self.params.destination.mode.value}."
+                                f" Supported modes for external tables are: append, overwrite, error.")
+
         relation = None
         if tables:
             dtypes = {key: value.data_types.get("base").dtype for key, value in self.table.schema.items()}
@@ -156,6 +160,10 @@ class Component(ComponentBase):
         """
         Write to native table by reading data from S3 by running query in DBX
         """
+        if self.params.destination.mode.value not in ["append", "overwrite", "upsert"]:
+            raise UserException(f"Unsupported mode: {self.params.destination.mode.value}."
+                                f" Supported modes for native tables are: append, overwrite, upsert.")
+
         self._uc_client = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
 
         # Create staging table
@@ -245,10 +253,8 @@ class Component(ComponentBase):
     def _execute_query(self, dest, query):
         logging.info(f"Executing query: {query}")
 
-        # warehouse_id = self._uc_client.warehouses.list()
-
         res = self._uc_client.statement_execution.execute_statement(
-            warehouse_id=self._uc_client.warehouses.list()[0].id,  # TODO implement some logic to select the warehouse
+            warehouse_id=self.params.destination.warehouse or self._uc_client.warehouses.list()[0].id,
             catalog=dest.catalog,
             schema=dest.schema_name,
             statement=query,
@@ -365,6 +371,14 @@ class Component(ComponentBase):
         w = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
         tables = w.tables.list(self.params.destination.catalog, self.params.destination.schema_name)
         return [SelectElement(t.name) for t in tables]
+
+    @sync_action("list_warehouses")
+    def list_dbx_warehouses(self):
+        uc_client = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
+        warehouses = uc_client.warehouses.list()
+        return [SelectElement(value=w.id, label=w.name) for w in warehouses]
+
+
 
 
 """

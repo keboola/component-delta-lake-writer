@@ -95,20 +95,38 @@
           },
           "propertyOrder": 25
         },
+        "warehouse": {
+          "title": "Warehouse used to load table",
+          "type": "string",
+          "format": "select",
+          "enum": [],
+          "options": {
+            "dependencies": {
+              "helper_access_method": "unity_catalog"
+            },
+            "async": {
+              "label": "Load warehouses",
+              "action": "list_dbx_warehouses"
+            }
+          },
+          "propertyOrder": 26
+        },
         "mode": {
           "enum": [
             "error",
             "append",
-            "overwrite"
+            "overwrite",
+            "upsert"
           ],
           "type": "string",
           "title": "Load Type",
           "default": "append",
           "options": {
             "enum_titles": [
-              "Raise error if existing",
+              "Raise error if existing (supported only by Direct Storage tables)",
               "Append",
-              "Overwrite"
+              "Overwrite",
+              "Upsert (supported only by Native tables)"
             ]
           },
           "propertyOrder": 3

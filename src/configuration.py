@@ -28,6 +28,7 @@ class Destination(BaseModel):
     schema_name: str = ""
     table: str = ""
     table_type: TableType = Field(default=TableType.external)
+    warehouse: str = ""
 
     mode: LoadType = Field(default=LoadType.append)
     partition_by: list[str] = Field(default_factory=list)
