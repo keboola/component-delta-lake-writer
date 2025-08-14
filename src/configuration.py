@@ -8,10 +8,16 @@ class AccessMethod(str, Enum):
     direct_storage = "direct_storage"
 
 
+class TableType(str, Enum):
+    external = "external"
+    native = "native"
+
+
 class LoadType(str, Enum):
     error = "error"
     append = "append"
     overwrite = "overwrite"
+    upsert = "upsert"
 
 
 class Destination(BaseModel):
@@ -21,6 +27,7 @@ class Destination(BaseModel):
     catalog: str = ""
     schema_name: str = ""
     table: str = ""
+    table_type: TableType = Field(default=TableType.external)
 
     mode: LoadType = Field(default=LoadType.append)
     partition_by: list[str] = Field(default_factory=list)

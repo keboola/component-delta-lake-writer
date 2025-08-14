@@ -7,6 +7,18 @@
     "debug"
   ],
   "properties": {
+    "helper_access_method": {
+      "type": "string",
+      "title": "Helper Access Method",
+      "options": {
+        "hidden": true
+      },
+      "template": "{{val}}",
+      "watch": {
+        "val": "_metadata_.root.parameters.access_method"
+      },
+      "propertyOrder": 20
+    },
     "destination": {
       "type": "object",
       "title": "Data Destination",
@@ -18,12 +30,70 @@
         "container_name": {
           "type": "string",
           "title": "Container name",
+          "options": {
+            "dependencies": {
+              "helper_access_method": "direct_storage"
+            }
+          },
           "propertyOrder": 1
         },
         "blob_name": {
           "type": "string",
           "title": "Blob name",
+          "options": {
+            "dependencies": {
+              "helper_access_method": "direct_storage"
+            }
+          },
           "propertyOrder": 2
+        },
+        "catalog": {
+          "title": "Catalog",
+          "type": "string",
+          "format": "select",
+          "enum": [],
+          "options": {
+            "dependencies": {
+              "helper_access_method": "unity_catalog"
+            },
+            "async": {
+              "label": "Load catalogs",
+              "action": "list_uc_catalogs"
+            }
+          },
+          "propertyOrder": 23
+        },
+        "schema_name": {
+          "title": "Schema",
+          "type": "string",
+          "format": "select",
+          "enum": [],
+          "options": {
+            "dependencies": {
+              "helper_access_method": "unity_catalog"
+            },
+            "async": {
+              "label": "Load schemas",
+              "action": "list_uc_schemas"
+            }
+          },
+          "propertyOrder": 24
+        },
+        "table": {
+          "title": "Table",
+          "type": "string",
+          "format": "select",
+          "enum": [],
+          "options": {
+            "dependencies": {
+              "helper_access_method": "unity_catalog"
+            },
+            "async": {
+              "label": "Load tables",
+              "action": "list_uc_tables"
+            }
+          },
+          "propertyOrder": 25
         },
         "mode": {
           "enum": [
