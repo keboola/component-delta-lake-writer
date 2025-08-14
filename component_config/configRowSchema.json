@@ -7,18 +7,6 @@
     "debug"
   ],
   "properties": {
-    "helper_access_method": {
-      "type": "string",
-      "title": "Helper Access Method",
-      "options": {
-        "hidden": true
-      },
-      "template": "{{val}}",
-      "watch": {
-        "val": "_metadata_.root.parameters.access_method"
-      },
-      "propertyOrder": 20
-    },
     "destination": {
       "type": "object",
       "title": "Data Destination",
@@ -27,6 +15,18 @@
         "blob_name"
       ],
       "properties": {
+        "helper_access_method": {
+          "type": "string",
+          "title": "Helper Access Method",
+          "options": {
+            "hidden": true
+          },
+          "template": "{{val}}",
+          "watch": {
+            "val": "_metadata_.root.parameters.access_method"
+          },
+          "propertyOrder": 20
+        },
         "container_name": {
           "type": "string",
           "title": "Container name",
@@ -102,7 +102,7 @@
           "enum": [],
           "options": {
             "dependencies": {
-              "helper_access_method": "unity_catalog"
+              "table_type": "native"
             },
             "async": {
               "label": "Load warehouses",
@@ -110,6 +110,25 @@
             }
           },
           "propertyOrder": 26
+        },
+        "table_type": {
+          "enum": [
+            "external",
+            "native"
+          ],
+          "type": "string",
+          "title": "Table Type",
+          "default": "External",
+          "options": {
+            "enum_titles": [
+              "External",
+              "Native"
+            ],
+            "dependencies": {
+              "helper_access_method": "unity_catalog"
+            }
+          },
+          "propertyOrder": 3
         },
         "mode": {
           "enum": [
@@ -129,7 +148,7 @@
               "Upsert (supported only by Native tables)"
             ]
           },
-          "propertyOrder": 3
+          "propertyOrder": 4
         },
         "partition_by": {
           "type": "array",
@@ -143,7 +162,7 @@
             "tags": true
           },
           "uniqueItems": true,
-          "propertyOrder": 4
+          "propertyOrder": 5
         },
         "compression": {
           "enum": [
@@ -170,7 +189,7 @@
             ]
           },
           "required": true,
-          "propertyOrder": 5
+          "propertyOrder": 6
         }
       },
       "propertyOrder": 1

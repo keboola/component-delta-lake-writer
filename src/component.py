@@ -2,6 +2,7 @@ import logging
 import os
 import time
 import json
+import re
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import TableOperation
@@ -28,6 +29,7 @@ class Component(ComponentBase):
         self._uc_client = None
         self.table = None
         self.s3 = None
+        self.stg_name = None
 
     def run(self):
         tables = self.get_input_tables_definitions(orphaned_manifests=True)
@@ -49,7 +51,11 @@ class Component(ComponentBase):
         if self.params.destination.table_type == "external":
             self.write_external_table(files, tables)
         elif self.params.destination.table_type == "native":
-            self.write_native_table(self.params.destination)
+            try:
+                self.write_native_table(self.params.destination)
+            finally:
+                if self._uc_client and not self.params.keep_stage:
+                    self._drop_stage_table()
 
     def write_external_table(self, files, tables):
         if self.params.destination.mode.value not in ["error", "append", "overwrite"]:
@@ -126,15 +132,19 @@ class Component(ComponentBase):
             raise UserException(f"Permission denied: {str(e)}")
 
     def _build_query_create_stage(self):
+        self.stg_name = f"stg_{self.environment_variables.project_id}_{self.environment_variables.config_row_id}"
         column_defs = []
         for idx, _ in enumerate(self.table.schema):
             column_defs.append(f"_c{idx} STRING")
 
         columns_str = ", ".join(column_defs)
         create_stage = f"""
-    CREATE OR REPLACE TABLE staging_table ({columns_str});
+    CREATE OR REPLACE TABLE {self.stg_name} ({columns_str});
     """
         return create_stage
+
+    def _drop_stage_table(self):
+        self._execute_query(self.params.destination, f"DROP TABLE IF EXISTS {self.stg_name};")
 
     def _build_query_load_stage(self):
         s3_files = self.get_s3_paths()
@@ -142,7 +152,7 @@ class Component(ComponentBase):
         filenames = [os.path.basename(f) for f in s3_files]
 
         load_query = f"""
-        COPY INTO staging_table
+        COPY INTO {self.stg_name}
         FROM '{dirname}/' WITH (
           CREDENTIAL (AWS_ACCESS_KEY = '{self.s3.get("credentials", {}).get("access_key_id")}',
                       AWS_SECRET_KEY = '{self.s3.get("credentials", {}).get("secret_access_key")}',
@@ -205,7 +215,7 @@ class Component(ComponentBase):
                 self._execute_query(
                     dest,
                     f"""INSERT INTO {table_full_name}
-                SELECT {", ".join(cast_cols)} FROM staging_table;""",
+                SELECT {", ".join(cast_cols)} FROM {self.stg_name};""",
                 )
 
             case "append":
@@ -213,7 +223,7 @@ class Component(ComponentBase):
                 self._execute_query(
                     dest,
                     f"""INSERT INTO {table_full_name}
-                SELECT {", ".join(cast_cols)} FROM staging_table;""",
+                SELECT {", ".join(cast_cols)} FROM {self.stg_name};""",
                 )
 
             case "upsert":
@@ -226,7 +236,7 @@ class Component(ComponentBase):
 
                 merge_sql = f"""
                 MERGE INTO {table_full_name} AS target
-                USING staging_table AS source
+                USING {self.stg_name} AS source
                 ON {on_clause}
                 WHEN MATCHED THEN
                   UPDATE SET {update_clause}
@@ -255,7 +265,8 @@ class Component(ComponentBase):
         return files
 
     def _execute_query(self, dest, query):
-        logging.info(f"Executing query: {query}")
+        to_log = re.sub(r"CREDENTIAL\s*\(.*?\)", "CREDENTIAL (--SENSITIVE--)", query, flags=re.DOTALL)
+        logging.debug(f"Executing query: {to_log}")
 
         res = self._uc_client.statement_execution.execute_statement(
             warehouse_id=self.params.destination.warehouse or self._uc_client.warehouses.list()[0].id,

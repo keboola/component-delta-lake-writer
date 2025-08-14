@@ -52,6 +52,7 @@ class Configuration(BaseModel):
     debug: bool = False
     threads: int = 1
     max_memory: int = 256
+    keep_stage: bool = False
 
     def __init__(self, **data):
         try:
