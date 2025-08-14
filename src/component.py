@@ -53,8 +53,10 @@ class Component(ComponentBase):
 
     def write_external_table(self, files, tables):
         if self.params.destination.mode.value not in ["error", "append", "overwrite"]:
-            raise UserException(f"Unsupported mode: {self.params.destination.mode.value}."
-                                f" Supported modes for external tables are: append, overwrite, error.")
+            raise UserException(
+                f"Unsupported mode: {self.params.destination.mode.value}."
+                f" Supported modes for external tables are: append, overwrite, error."
+            )
 
         relation = None
         if tables:
@@ -161,8 +163,10 @@ class Component(ComponentBase):
         Write to native table by reading data from S3 by running query in DBX
         """
         if self.params.destination.mode.value not in ["append", "overwrite", "upsert"]:
-            raise UserException(f"Unsupported mode: {self.params.destination.mode.value}."
-                                f" Supported modes for native tables are: append, overwrite, upsert.")
+            raise UserException(
+                f"Unsupported mode: {self.params.destination.mode.value}."
+                f" Supported modes for native tables are: append, overwrite, upsert."
+            )
 
         self._uc_client = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
 
@@ -180,7 +184,7 @@ class Component(ComponentBase):
             dtype = col_def.data_types["base"].dtype
             col_defs.append(f"{col_name} {dtype}")
             cast_cols.append(f"CAST(_c{idx} AS {dtype}) AS {col_name}")
-            cast_cols_upsert[col_name] = f"CAST(source._c{idx} AS {dtype})" # for upsert
+            cast_cols_upsert[col_name] = f"CAST(source._c{idx} AS {dtype})"  # for upsert
 
         primary_keys = self.table.primary_key or []
         table_full_name = f"{dest.catalog}.{dest.schema_name}.{dest.table}"
@@ -192,7 +196,7 @@ class Component(ComponentBase):
                         ({", ".join(col_defs)} {pk}
                         ) USING DELTA {partition};"""
 
-        logging.info(f"Data loaded to staging table.")
+        logging.debug("Data loaded to staging table.")
 
         # Write to the final table
         match self.params.destination.mode.value:
@@ -377,8 +381,6 @@ class Component(ComponentBase):
         uc_client = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
         warehouses = uc_client.warehouses.list()
         return [SelectElement(value=w.id, label=w.name) for w in warehouses]
-
-
 
 
 """
