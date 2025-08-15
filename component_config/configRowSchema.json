@@ -106,7 +106,7 @@
             },
             "async": {
               "label": "Load warehouses",
-              "action": "list_dbx_warehouses"
+              "action": "list_warehouses"
             }
           },
           "propertyOrder": 26
@@ -186,7 +186,10 @@
               "LZ4",
               "ZSTD",
               "LZ4_RAW"
-            ]
+            ],
+            "dependencies": {
+              "helper_access_method": "direct_storage"
+            }
           },
           "required": true,
           "propertyOrder": 6

@@ -159,7 +159,7 @@ class Component(ComponentBase):
                       AWS_SESSION_TOKEN = '{self.s3.get("credentials", {}).get("session_token")}')
         )
         FILEFORMAT = CSV
-        FILES = {tuple(filenames)}
+        FILES = {str(tuple(filenames)).rstrip(")").rstrip(",")})
         FORMAT_OPTIONS (
           'header' = 'false',
           'inferSchema' = 'false',
@@ -228,6 +228,9 @@ class Component(ComponentBase):
 
             case "upsert":
                 #  https://docs.databricks.com/aws/en/delta/merge
+
+                if not primary_keys:
+                    raise UserException("Upsert mode requires primary keys to be defined in the table schema.")
 
                 self._execute_query(dest, ddl_query % "CREATE TABLE IF NOT EXISTS")
 
