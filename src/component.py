@@ -1,7 +1,6 @@
 import logging
 import os
 import time
-import json
 import re
 
 from databricks.sdk import WorkspaceClient
@@ -29,7 +28,6 @@ class Component(ComponentBase):
         self._connection = self.init_connection()
         self._uc_client = None
         self.table = None
-        self.s3 = None
         self.stg_name = None
 
     def run(self):
@@ -47,7 +45,6 @@ class Component(ComponentBase):
 
         if tables:
             self.table = tables[0]
-            self.s3 = json.load(open(f"{self.data_folder_path}/in/tables/{self.table.name}.csv.manifest")).get("s3", {})
 
         if self.params.destination.table_type == "external":
             self.write_external_table(files, tables)
@@ -155,9 +152,9 @@ class Component(ComponentBase):
         load_query = f"""
         COPY INTO {self.stg_name}
         FROM '{dirname}/' WITH (
-          CREDENTIAL (AWS_ACCESS_KEY = '{self.s3.get("credentials", {}).get("access_key_id")}',
-                      AWS_SECRET_KEY = '{self.s3.get("credentials", {}).get("secret_access_key")}',
-                      AWS_SESSION_TOKEN = '{self.s3.get("credentials", {}).get("session_token")}')
+          CREDENTIAL (AWS_ACCESS_KEY = '{self.table.s3_staging.credentials_access_key_id}',
+                      AWS_SECRET_KEY = '{self.table.s3_staging.credentials_secret_access_key}',
+                      AWS_SESSION_TOKEN = '{self.table.s3_staging.credentials_session_token}')
         )
         FILEFORMAT = CSV
         FILES = {str(tuple(filenames)).rstrip(")").rstrip(",")})
@@ -255,15 +252,15 @@ class Component(ComponentBase):
         self._connection.execute(
             f"""CREATE OR REPLACE SECRET (
                                     TYPE S3,
-                                    REGION '{self.s3.get("region")}',
-                                    KEY_ID '{self.s3.get("credentials", {}).get("access_key_id")}',
-                                    SECRET '{self.s3.get("credentials", {}).get("secret_access_key")}',
-                                    SESSION_TOKEN '{self.s3.get("credentials", {}).get("session_token")}'
+                                    REGION '{self.table.s3_staging.region}',
+                                    KEY_ID '{self.table.s3_staging.credentials_access_key_id}',
+                                    SECRET '{self.table.s3_staging.credentials_secret_access_key}',
+                                    SESSION_TOKEN '{self.table.s3_staging.credentials_session_token}'
                                     );
                                """
         )
         manifest = self._connection.sql(
-            f"FROM read_json('s3://{self.s3.get('bucket')}/{self.s3.get('key')}')"
+            f"FROM read_json('s3://{self.table.s3_staging.bucket}/{self.table.s3_staging.key}')"
         ).fetchone()[0]
         files = [f.get("url") for f in manifest]
         return files
