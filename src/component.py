@@ -74,7 +74,7 @@ class Component(ComponentBase):
         if files:
             files_paths = [file.full_path for file in files]
             relation = self._connection.read_parquet(files_paths)
-        batches = relation.select("order_id").fetch_arrow_reader(batch_size=self.params.batch_size)
+        batches = relation.fetch_arrow_reader(batch_size=self.params.batch_size)
         storage_options, uri = self._get_storage_options_and_uri()
         writer_properties = WriterProperties(
             data_page_size_limit=8 * 1024 * 1024,
