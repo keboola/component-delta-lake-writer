@@ -105,10 +105,11 @@ class Component(ComponentBase):
             line += self.params.batch_size
         self._connection.close()
         # update Unity Catalog metadata from the delta table
-        dest = self.params.destination
-        self._execute_query(
-            dest=dest, query=f"MSCK REPAIR TABLE {dest.catalog}.{dest.schema_name}.{dest.table} SYNC METADATA;"
-        )
+        if self.params.access_method == "unity_catalog":
+            dest = self.params.destination
+            self._execute_query(
+                dest=dest, query=f"MSCK REPAIR TABLE {dest.catalog}.{dest.schema_name}.{dest.table} SYNC METADATA;"
+            )
 
     def _get_temp_credentials(self):
         dest = self.params.destination
