@@ -58,9 +58,7 @@
             },
             "async": {
               "label": "Load catalogs",
-              "action": "list_uc_catalogs",
-              "autoload": [],
-              "cache": false
+              "action": "list_uc_catalogs"
             }
           },
           "propertyOrder": 23
@@ -113,14 +111,13 @@
           "format": "select",
           "enum": [],
           "options": {
+            "tooltip": "If not specified, the component will use the 1st returned warehouse",
             "dependencies": {
               "table_type": "native"
             },
             "async": {
               "label": "Load warehouses",
-              "action": "list_warehouses",
-              "autoload": [],
-              "cache": false
+              "action": "list_warehouses"
             }
           },
           "propertyOrder": 26
