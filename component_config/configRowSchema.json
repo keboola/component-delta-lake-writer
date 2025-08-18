@@ -58,7 +58,9 @@
             },
             "async": {
               "label": "Load catalogs",
-              "action": "list_uc_catalogs"
+              "action": "list_uc_catalogs",
+              "autoload": [],
+              "cache": false
             }
           },
           "propertyOrder": 23
@@ -74,7 +76,11 @@
             },
             "async": {
               "label": "Load schemas",
-              "action": "list_uc_schemas"
+              "action": "list_uc_schemas",
+              "autoload": [
+                "parameters.destination.catalog"
+              ],
+              "cache": false
             }
           },
           "propertyOrder": 24
@@ -85,12 +91,18 @@
           "format": "select",
           "enum": [],
           "options": {
+            "tags": true,
+            "creatable": true,
             "dependencies": {
               "helper_access_method": "unity_catalog"
             },
             "async": {
               "label": "Load tables",
-              "action": "list_uc_tables"
+              "action": "list_uc_tables",
+              "autoload": [
+                "parameters.destination.schema_name"
+              ],
+              "cache": false
             }
           },
           "propertyOrder": 25
@@ -106,7 +118,9 @@
             },
             "async": {
               "label": "Load warehouses",
-              "action": "list_warehouses"
+              "action": "list_warehouses",
+              "autoload": [],
+              "cache": false
             }
           },
           "propertyOrder": 26
@@ -153,13 +167,17 @@
         "partition_by": {
           "type": "array",
           "items": {
-            "enum": [],
             "type": "string"
           },
-          "title": "Partition table by",
+          "title": "Columns to partition by",
           "format": "select",
           "options": {
-            "tags": true
+            "tags": true,
+            "async": {
+              "label": "Re-load columns",
+              "action": "list_table_columns",
+              "cache": false
+            }
           },
           "uniqueItems": true,
           "propertyOrder": 5

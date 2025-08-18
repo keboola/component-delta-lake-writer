@@ -15,6 +15,7 @@ from duckdb.duckdb import DuckDBPyConnection
 from keboola.component.base import ComponentBase, sync_action
 from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import SelectElement
+from storage_api_client import SAPIClient
 
 from configuration import Configuration
 
@@ -395,6 +396,20 @@ class Component(ComponentBase):
         uc_client = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
         warehouses = uc_client.warehouses.list()
         return [SelectElement(value=w.id, label=w.name) for w in warehouses]
+
+    @sync_action("list_table_columns")
+    def list_table_columns(self):
+        in_tables = self.configuration.tables_input_mapping
+
+        if in_tables:
+            storage_client = SAPIClient(self.environment_variables.url, self.environment_variables.token)
+
+            table_id = self.configuration.tables_input_mapping[0].source
+            columns = storage_client.get_table_detail(table_id)["columns"]
+        else:
+            raise UserException("Can list only columns from input tables, not files.")
+
+        return [SelectElement(col) for col in columns]
 
 
 """
