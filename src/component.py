@@ -89,7 +89,7 @@ class Component(ComponentBase):
             storage_options,
             writer_properties,
             self.params.destination.partition_by,
-            schema_mode="overwrite",
+            schema_mode="merge",
         )
         line += self.params.batch_size
         for batch in batches:
@@ -101,6 +101,7 @@ class Component(ComponentBase):
                 storage_options,
                 writer_properties,
                 self.params.destination.partition_by,
+                "merge",
             )
             line += self.params.batch_size
         self._connection.close()
