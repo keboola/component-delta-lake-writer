@@ -178,6 +178,9 @@ class Component(ComponentBase):
                 f" Supported modes for native tables are: append, overwrite, upsert."
             )
 
+        if not self.params.destination.warehouse:
+            raise UserException("Warehouse must be specified for native tables.")
+
         self._uc_client = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
 
         # Create staging table
@@ -272,7 +275,7 @@ class Component(ComponentBase):
         logging.debug(f"Executing query: {to_log}")
 
         res = self._uc_client.statement_execution.execute_statement(
-            warehouse_id=self.params.destination.warehouse or self._uc_client.warehouses.list()[0].id,
+            warehouse_id=self.params.destination.warehouse,
             catalog=dest.catalog,
             schema=dest.schema_name,
             statement=query,
