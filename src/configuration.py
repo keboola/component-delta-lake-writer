@@ -37,15 +37,15 @@ class Destination(BaseModel):
 
 class Configuration(BaseModel):
     access_method: AccessMethod = Field(default=AccessMethod.direct_storage)
-    unity_catalog_url: str = None
-    unity_catalog_token: str = Field(alias="#unity_catalog_token", default=None)
-    provider: str = None
-    abs_account_name: str = None
-    abs_sas_token: str = Field(alias="#abs_sas_token", default=None)
-    aws_region: str = None
-    aws_key_id: str = None
-    aws_key_secret: str = Field(alias="#aws_key_secret", default=None)
-    gcp_service_account_key: str = Field(alias="#gcp_service_account_key", default=None)
+    unity_catalog_url: str = ""
+    unity_catalog_token: str = Field(alias="#unity_catalog_token", default="")
+    provider: str = ""
+    abs_account_name: str = ""
+    abs_sas_token: str = Field(alias="#abs_sas_token", default="")
+    aws_region: str = ""
+    aws_key_id: str = ""
+    aws_key_secret: str = Field(alias="#aws_key_secret", default="")
+    gcp_service_account_key: str = Field(alias="#gcp_service_account_key", default="")
     destination: Destination
     batch_size: int = 100_000
     preserve_insertion_order: bool = True

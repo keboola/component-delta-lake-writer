@@ -159,7 +159,7 @@ class Component(ComponentBase):
                       AWS_SESSION_TOKEN = '{self.table.s3_staging.credentials_session_token}')
         )
         FILEFORMAT = CSV
-        FILES = {str(tuple(filenames)).rstrip(")").rstrip(",")})
+        FILES = ({", ".join(f"'{file}'" for file in filenames)})
         FORMAT_OPTIONS (
           'header' = 'false',
           'inferSchema' = 'false',
