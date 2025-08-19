@@ -255,14 +255,15 @@ class Component(ComponentBase):
 
     def get_s3_paths(self):
         self._connection.execute(
-            f"""CREATE OR REPLACE SECRET (
-                                    TYPE S3,
-                                    REGION '{self.table.s3_staging.region}',
-                                    KEY_ID '{self.table.s3_staging.credentials_access_key_id}',
-                                    SECRET '{self.table.s3_staging.credentials_secret_access_key}',
-                                    SESSION_TOKEN '{self.table.s3_staging.credentials_session_token}'
-                                    );
-                               """
+            f"""
+            CREATE OR REPLACE SECRET (
+                TYPE S3,
+                REGION '{self.table.s3_staging.region}',
+                KEY_ID '{self.table.s3_staging.credentials_access_key_id}',
+                SECRET '{self.table.s3_staging.credentials_secret_access_key}',
+                SESSION_TOKEN '{self.table.s3_staging.credentials_session_token}'
+            );
+            """
         )
         manifest = self._connection.sql(
             f"FROM read_json('s3://{self.table.s3_staging.bucket}/{self.table.s3_staging.key}')"
