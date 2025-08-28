@@ -29,6 +29,7 @@ class Component(ComponentBase):
         self._uc_client = None
         self.table = None
         self.stg_name = None
+        self.uc_table_path = None
 
     def run(self):
         tables = self.get_input_tables_definitions(orphaned_manifests=True)
@@ -46,11 +47,15 @@ class Component(ComponentBase):
         if tables:
             self.table = tables[0]
 
+        dest = self.params.destination
+        self.uc_table_path = f"{dest.catalog}.{dest.schema_name}.{dest.table}"
+
         if self.params.destination.table_type == "external":
             self.write_external_table(files, tables)
         elif self.params.destination.table_type == "native":
+            # used finally so even when write_native_table fails it removes stage before raising exception
             try:
-                self.write_native_table(self.params.destination)
+                self.write_native_table()
             finally:
                 if self._uc_client and not self.params.keep_stage:
                     self._drop_stage_table()
@@ -107,19 +112,15 @@ class Component(ComponentBase):
         self._connection.close()
         # update Unity Catalog metadata from the delta table
         if self.params.access_method == "unity_catalog":
-            dest = self.params.destination
-            self._execute_query(
-                dest=dest, query=f"MSCK REPAIR TABLE {dest.catalog}.{dest.schema_name}.{dest.table} SYNC METADATA;"
+            self._execute_query(f"MSCK REPAIR TABLE {self.uc_table_path} SYNC METADATA;")
+
+    def _get_temp_credentials_and_region(self):
+        if not self._uc_client.tables.exists(full_name=self.uc_table_path).table_exists:
+            raise UserException(
+                f"External table {self.uc_table_path} does not exist in Unity Catalog, please create it."
             )
 
-    def _get_temp_credentials(self):
-        dest = self.params.destination
-        table_full_name = f"{dest.catalog}.{dest.schema_name}.{dest.table}"
-
-        if not self._uc_client.tables.exists(full_name=table_full_name).table_exists:
-            raise UserException(f"External table {table_full_name} does not exist in Unity Catalog, please create it.")
-
-        table_details = self._uc_client.tables.get(full_name=table_full_name)
+        table_details = self._uc_client.tables.get(full_name=self.uc_table_path)
         table_id = table_details.table_id
         region = self._uc_client.metastores.get(table_details.metastore_id).region
 
@@ -134,7 +135,7 @@ class Component(ComponentBase):
     def _build_query_create_stage(self):
         self.stg_name = f"stg_{self.environment_variables.project_id}_{self.environment_variables.config_row_id}"
         column_defs = []
-        for idx, _ in enumerate(self.table.schema):
+        for idx in range(len(self.table.schema)):
             column_defs.append(f"_c{idx} STRING")
 
         columns_str = ", ".join(column_defs)
@@ -144,12 +145,14 @@ class Component(ComponentBase):
         return create_stage
 
     def _drop_stage_table(self):
-        self._execute_query(self.params.destination, f"DROP TABLE IF EXISTS {self.stg_name};")
+        self._execute_query(f"DROP TABLE IF EXISTS {self.stg_name};")
 
     def _build_query_load_stage(self):
         s3_files = self.get_s3_paths()
         dirname = os.path.dirname(s3_files[0])
         filenames = [os.path.basename(f) for f in s3_files]
+        quoted_filenames = [f"'{file}'" for file in filenames]
+        files_str = ", ".join(quoted_filenames)
 
         load_query = f"""
         COPY INTO {self.stg_name}
@@ -159,7 +162,7 @@ class Component(ComponentBase):
                       AWS_SESSION_TOKEN = '{self.table.s3_staging.credentials_session_token}')
         )
         FILEFORMAT = CSV
-        FILES = ({", ".join(f"'{file}'" for file in filenames)})
+        FILES = ({files_str})
         FORMAT_OPTIONS (
           'header' = 'false',
           'inferSchema' = 'false',
@@ -168,7 +171,7 @@ class Component(ComponentBase):
         """
         return load_query
 
-    def write_native_table(self, dest):
+    def write_native_table(self):
         """
         Write to native table by reading data from S3 by running query in DBX
         """
@@ -184,10 +187,11 @@ class Component(ComponentBase):
         self._uc_client = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
 
         # Create staging table
-        self._execute_query(dest, self._build_query_create_stage())
+        self._execute_query(self._build_query_create_stage())
 
         # Load data into staging table
-        self._execute_query(dest, self._build_query_load_stage())
+        self._execute_query(self._build_query_load_stage())
+        logging.info("Data loaded to staging table.")
 
         col_defs = []
         cast_cols = []
@@ -200,33 +204,35 @@ class Component(ComponentBase):
             cast_cols_upsert[col_name] = f"CAST(source._c{idx} AS {dtype})"  # for upsert
 
         primary_keys = self.table.primary_key or []
-        table_full_name = f"{dest.catalog}.{dest.schema_name}.{dest.table}"
+        col_defs_str = ", ".join(col_defs)
 
         pk = f", PRIMARY KEY ({', '.join(primary_keys)})" if primary_keys else ""
-        partition = f"PARTITIONED BY ({', '.join(dest.partition_by)})" if getattr(dest, "partition_by", None) else ""
+        partition = (
+            f"PARTITIONED BY ({', '.join(self.params.destination.partition_by)})"
+            if getattr(self.params.destination, "partition_by", None)
+            else ""
+        )
 
-        ddl_query = f"""%s {table_full_name}
-                        ({", ".join(col_defs)} {pk}
-                        ) USING DELTA {partition};"""
-
-        logging.debug("Data loaded to staging table.")
+        if self.params.destination.mode.value == "overwrite":
+            self._execute_query(
+                f"CREATE OR REPLACE TABLE {self.uc_table_path} ({col_defs_str} {pk}) USING DELTA {partition};"
+            )
+        else:
+            # for append and upsert modes
+            self._execute_query(
+                f"CREATE TABLE IF NOT EXISTS {self.uc_table_path} ({col_defs_str} {pk}) USING DELTA {partition};"
+            )
 
         # Write to the final table
         match self.params.destination.mode.value:
             case "overwrite":
-                self._execute_query(dest, ddl_query % "CREATE OR REPLACE TABLE")
                 self._execute_query(
-                    dest,
-                    f"""INSERT INTO {table_full_name}
-                SELECT {", ".join(cast_cols)} FROM {self.stg_name};""",
+                    f"INSERT INTO {self.uc_table_path} SELECT {', '.join(cast_cols)} FROM {self.stg_name};"
                 )
 
             case "append":
-                self._execute_query(dest, ddl_query % "CREATE TABLE IF NOT EXISTS")
                 self._execute_query(
-                    dest,
-                    f"""INSERT INTO {table_full_name}
-                SELECT {", ".join(cast_cols)} FROM {self.stg_name};""",
+                    f"INSERT INTO {self.uc_table_path} SELECT {', '.join(cast_cols)} FROM {self.stg_name};"
                 )
 
             case "upsert":
@@ -235,23 +241,23 @@ class Component(ComponentBase):
                 if not primary_keys:
                     raise UserException("Upsert mode requires primary keys to be defined in the table schema.")
 
-                self._execute_query(dest, ddl_query % "CREATE TABLE IF NOT EXISTS")
-
                 on_clause = " AND ".join(f"target.{pk} = {cast_cols_upsert[pk]}" for pk in primary_keys)
                 update_clause = ", ".join(f"target.{c} = {cast_cols_upsert[c]}" for c in self.table.schema.keys())
+                column_names_str = ", ".join(self.table.schema.keys())
+                cast_src_cols = ", ".join([cast_cols_upsert[col] for col in self.table.schema.keys()])
 
                 merge_sql = f"""
-                MERGE INTO {table_full_name} AS target
+                MERGE INTO {self.uc_table_path} AS target
                 USING {self.stg_name} AS source
                 ON {on_clause}
                 WHEN MATCHED THEN
                   UPDATE SET {update_clause}
                 WHEN NOT MATCHED THEN
-                  INSERT ({", ".join(self.table.schema.keys())})
-                  VALUES ({", ".join([cast_cols_upsert[col] for col in self.table.schema.keys()])});
+                  INSERT ({column_names_str})
+                  VALUES ({cast_src_cols});
                 """
 
-                self._execute_query(dest, merge_sql)
+                self._execute_query(merge_sql)
 
     def get_s3_paths(self):
         self._connection.execute(
@@ -265,20 +271,21 @@ class Component(ComponentBase):
             );
             """
         )
+        # read the manifest (list of dictionaries) and extract the table file urls
         manifest = self._connection.sql(
             f"FROM read_json('s3://{self.table.s3_staging.bucket}/{self.table.s3_staging.key}')"
         ).fetchone()[0]
         files = [f.get("url") for f in manifest]
         return files
 
-    def _execute_query(self, dest, query):
-        to_log = re.sub(r"CREDENTIAL\s*\(.*?\)", "CREDENTIAL (--SENSITIVE--)", query, flags=re.DOTALL)
+    def _execute_query(self, query):
+        to_log = re.sub(r"CREDENTIAL\s+?\(.+?\)", "CREDENTIAL (--SENSITIVE--)", query, flags=re.DOTALL)
         logging.debug(f"Executing query: {to_log}")
 
         res = self._uc_client.statement_execution.execute_statement(
             warehouse_id=self.params.destination.warehouse,
-            catalog=dest.catalog,
-            schema=dest.schema_name,
+            catalog=self.params.destination.catalog,
+            schema=self.params.destination.schema_name,
             statement=query,
         )
 
@@ -289,7 +296,7 @@ class Component(ComponentBase):
             res = self._uc_client.statement_execution.get_statement(statement_id)
 
         if res.status.state.value == "FAILED":
-            raise UserException(f"Failed to create table {dest.table}: {res.status.error}")
+            raise UserException(f"Failed to execute query {query} : {res.status.error}")
 
     def _get_storage_options_and_uri(self):
         storage_options = {
@@ -318,28 +325,28 @@ class Component(ComponentBase):
                 storage_options |= {"google_service_account_key": self.params.gcp_service_account_key}
 
             case _:
-                if self.params.access_method == "unity_catalog":
-                    self._uc_client = WorkspaceClient(
-                        host=self.params.unity_catalog_url, token=self.params.unity_catalog_token
-                    )
-
-                    temp_creds, region = self._get_temp_credentials()
-                    uri = temp_creds.url
-
-                    if temp_creds.azure_user_delegation_sas:
-                        storage_options |= {
-                            "azure_storage_account_name": temp_creds.url.split("@")[1].split(".")[0],
-                            "azure_storage_sas_token": temp_creds.azure_user_delegation_sas.sas_token,
-                        }
-                    elif temp_creds.aws_temp_credentials:
-                        storage_options |= {
-                            "aws_region": region,
-                            "aws_access_key_id": temp_creds.aws_temp_credentials.access_key_id,
-                            "aws_secret_access_key": temp_creds.aws_temp_credentials.secret_access_key,
-                            "aws_session_token": temp_creds.aws_temp_credentials.session_token,
-                        }
-                else:
+                if not self.params.access_method == "unity_catalog":
                     raise UserException(f"Unknown provider: {self.params.provider}")
+
+                self._uc_client = WorkspaceClient(
+                    host=self.params.unity_catalog_url, token=self.params.unity_catalog_token
+                )
+
+                temp_creds, region = self._get_temp_credentials_and_region()
+                uri = temp_creds.url
+
+                if temp_creds.azure_user_delegation_sas:
+                    storage_options |= {
+                        "azure_storage_account_name": temp_creds.url.split("@")[1].split(".")[0],
+                        "azure_storage_sas_token": temp_creds.azure_user_delegation_sas.sas_token,
+                    }
+                elif temp_creds.aws_temp_credentials:
+                    storage_options |= {
+                        "aws_region": region,
+                        "aws_access_key_id": temp_creds.aws_temp_credentials.access_key_id,
+                        "aws_secret_access_key": temp_creds.aws_temp_credentials.secret_access_key,
+                        "aws_session_token": temp_creds.aws_temp_credentials.session_token,
+                    }
 
         return storage_options, uri
 
