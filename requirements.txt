@@ -1,8 +1,0 @@
-keboola.component
-keboola.utils
-keboola.http-client
-freezegun
-mock
-pydantic
-duckdb==1.2.0
-deltalake==0.24.0

@@ -2,9 +2,47 @@
   "type": "object",
   "title": "Authorization",
   "required": [
-    "provider"
+    "access_method"
   ],
   "properties": {
+    "access_method": {
+      "enum": [
+        "unity_catalog",
+        "direct_storage"
+      ],
+      "type": "string",
+      "title": "Data Access Method",
+      "default": "direct_storage",
+      "options": {
+        "enum_titles": [
+          "Unity Catalog",
+          "Direct Storage Access"
+        ]
+      },
+      "required": true,
+      "propertyOrder": 1
+    },
+    "unity_catalog_url": {
+      "type": "string",
+      "title": "Unity Catalog URL",
+      "propertyOrder": 2,
+      "options": {
+        "dependencies": {
+          "access_method": "unity_catalog"
+        }
+      }
+    },
+    "#unity_catalog_token": {
+      "type": "string",
+      "title": "PAT token",
+      "format": "password",
+      "propertyOrder": 3,
+      "options": {
+        "dependencies": {
+          "access_method": "unity_catalog"
+        }
+      }
+    },
     "provider": {
       "enum": [
         "s3",
@@ -15,6 +53,9 @@
       "title": "Cloud Storage",
       "default": "full_sync",
       "options": {
+        "dependencies": {
+          "access_method": "direct_storage"
+        },
         "enum_titles": [
           "AWS S3",
           "Azure Blob Storage",
@@ -23,12 +64,12 @@
       },
       "required": true,
       "description": "Select the cloud storage provider.",
-      "propertyOrder": 1
+      "propertyOrder": 4
     },
     "abs_account_name": {
       "type": "string",
       "title": "Storage Account Name",
-      "propertyOrder": 2,
+      "propertyOrder": 5,
       "options": {
         "dependencies": {
           "provider": "abs"
@@ -39,7 +80,7 @@
       "type": "string",
       "title": "SAS token",
       "format": "password",
-      "propertyOrder": 3,
+      "propertyOrder": 6,
       "options": {
         "dependencies": {
           "provider": "abs"
@@ -50,7 +91,7 @@
       "type": "string",
       "title": "AWS Region",
       "description": "The AWS region where the bucket is located for example 'eu-central-1' or 'us-east-1'.",
-      "propertyOrder": 4,
+      "propertyOrder": 7,
       "options": {
         "dependencies": {
           "provider": "s3"
@@ -60,7 +101,7 @@
     "aws_key_id": {
       "type": "string",
       "title": "Access key ID",
-      "propertyOrder": 5,
+      "propertyOrder": 8,
       "options": {
         "dependencies": {
           "provider": "s3"
@@ -71,7 +112,7 @@
       "type": "string",
       "title": "Secret Access Key",
       "format": "password",
-      "propertyOrder": 6,
+      "propertyOrder": 9,
       "options": {
         "dependencies": {
           "provider": "s3"
@@ -83,7 +124,7 @@
       "title": "Service Account Key",
       "description": "Copy & paste the whole JSON of the Google service account key file. For instructions on how to create the service account, see the <a href=\"https://help.keboola.com/components/writers/database/bigquery/#create-service-account\"> documentation.</a>",
       "format": "password",
-      "propertyOrder": 7,
+      "propertyOrder": 10,
       "options": {
         "dependencies": {
           "provider": "gcs"

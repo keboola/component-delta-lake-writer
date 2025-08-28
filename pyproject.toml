@@ -1,0 +1,19 @@
+[project]
+name = "component-delta-lake-writer"
+dynamic = ["version"]
+description = "Delta Lake writer"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "databricks-sdk>=0.63.0",
+    "deltalake>=1.1.0",
+    "duckdb>=1.3.2",
+    "flake8>=7.3.0",
+    "freezegun>=1.5.5",
+    "keboola-component>=1.6.11",
+    "keboola-http-client>=1.0.1",
+    "keboola-utils>=1.1.0",
+    "mock>=5.2.0",
+    "pyarrow>=21.0.0",
+    "pydantic>=2.11.7",
+]
