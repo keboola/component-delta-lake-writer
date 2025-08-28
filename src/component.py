@@ -279,7 +279,7 @@ class Component(ComponentBase):
         return files
 
     def _execute_query(self, query):
-        to_log = re.sub(r"CREDENTIAL\s+?\(.+?\)", "CREDENTIAL (--SENSITIVE--)", query, flags=re.DOTALL)
+        to_log = re.sub(r"CREDENTIAL\s\(.+\)", "CREDENTIAL (--SENSITIVE--)", query, flags=re.DOTALL)
         logging.debug(f"Executing query: {to_log}")
 
         res = self._uc_client.statement_execution.execute_statement(
