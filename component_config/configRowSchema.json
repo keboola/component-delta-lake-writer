@@ -215,9 +215,14 @@
     "batch_size": {
       "type": "integer",
       "title": "Batch size",
-      "default": 10000,
+      "default": 25000,
       "propertyOrder": 2,
-      "description": "By default, the extractor will load data in batches of 100 000 rows. You can adjust this value to optimize the performance (or solve OOM) of the writer."
+      "description": "By default, the extractor will load data in batches of 25 000 rows. You can adjust this value to optimize the performance (or solve OOM) of the writer.",
+      "options": {
+        "dependencies": {
+          "helper_access_method": "direct_storage"
+        }
+      }
     },
     "preserve_insertion_order": {
       "type": "boolean",
@@ -225,7 +230,12 @@
       "format": "checkbox",
       "default": true,
       "description": "If enabled, the writer will preserve the order of the rows in the destination table, when encountering OOM error, disabling this option may help",
-      "propertyOrder": 3
+      "propertyOrder": 3,
+      "options": {
+        "dependencies": {
+          "helper_access_method": "direct_storage"
+        }
+      }
     },
     "debug": {
       "type": "boolean",

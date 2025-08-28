@@ -47,7 +47,7 @@ class Configuration(BaseModel):
     aws_key_secret: str = Field(alias="#aws_key_secret", default="")
     gcp_service_account_key: str = Field(alias="#gcp_service_account_key", default="")
     destination: Destination
-    batch_size: int = 100_000
+    batch_size: int = 25_000
     preserve_insertion_order: bool = True
     debug: bool = False
     threads: int = 1
