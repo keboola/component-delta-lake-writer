@@ -61,7 +61,7 @@
               "action": "list_uc_catalogs"
             }
           },
-          "propertyOrder": 23
+          "propertyOrder": 3
         },
         "schema_name": {
           "title": "Schema",
@@ -81,7 +81,7 @@
               "cache": false
             }
           },
-          "propertyOrder": 24
+          "propertyOrder": 4
         },
         "table": {
           "title": "Table",
@@ -103,7 +103,7 @@
               "cache": false
             }
           },
-          "propertyOrder": 25
+          "propertyOrder": 5
         },
         "warehouse": {
           "title": "Warehouse used to load table",
@@ -139,7 +139,7 @@
               "helper_access_method": "unity_catalog"
             }
           },
-          "propertyOrder": 3
+          "propertyOrder": 6
         },
         "mode": {
           "enum": [
@@ -159,7 +159,7 @@
               "Upsert (supported only by Native tables)"
             ]
           },
-          "propertyOrder": 4
+          "propertyOrder": 7
         },
         "partition_by": {
           "type": "array",
@@ -177,7 +177,7 @@
             }
           },
           "uniqueItems": true,
-          "propertyOrder": 5
+          "propertyOrder": 8
         },
         "compression": {
           "enum": [
@@ -207,7 +207,7 @@
             }
           },
           "required": true,
-          "propertyOrder": 6
+          "propertyOrder": 9
         }
       },
       "propertyOrder": 1
