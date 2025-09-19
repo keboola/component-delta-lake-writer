@@ -1,1 +1,1 @@
-Delta Lake short description
+Delta Tables are a type of data storage format that combines the benefits of data lakes and data warehouses.

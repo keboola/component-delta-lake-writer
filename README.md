@@ -1,84 +1,41 @@
-Delta Lake
+Delta Tables Extractor
 =============
 
-Description
+Component supports two access modes:
 
-**Table of Contents:**
+### 1. Direct Access to Delta Tables
+Direct access to delta tables in your blob storage. We currently support the following providers:
 
-[TOC]
+- **AWS S3**: [Access Grants Credentials](https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-grants-credentials.html)
+- **Azure Blob Storage**: [Create SAS Tokens](https://learn.microsoft.com/en-us/azure/ai-services/translator/document-translation/how-to-guides/create-sas-tokens?tabs=Containers#create-sas-tokens-in-the-azure-portal)
+- **Google Cloud Storage**: [Create service account](https://help.keboola.com/components/writers/database/bigquery/#create-service-account)
 
-Functionality Notes
-===================
+In this mode, the Delta Table path is defined by specifying the bucket/container and blob location where the table data is stored.
 
-Prerequisites
-=============
+### 2. Unity Catalog
+Currently we support only Azure Blob Storage backend.
 
-Ensure you have the necessary API token, register the application, etc.
+**Setup Requirements:**
+- **Access Token**: [How to get access token in Databricks](https://docs.databricks.com/aws/en/dev-tools/auth/pat#databricks-personal-access-tokens-for-workspace-users)
+- **External Data Access**: [Enable external data access on the metastore](https://docs.databricks.com/aws/en/external-access/admin#enable-external-data-access-on-the-metastore)
+- **Permissions**: Grant EXTERNAL USE SCHEMA permission
+  - Navigate to: Workspace > Permissions > Add external use schema
+  
+    In this mode, the user selects the catalog, schema, and table in the configuration row.
 
-Features
-========
+**Unity Catalog supports two table types**
+- **External tables** - Writing from the component directly to the underlying blob storage, and updating metadata in Unity Catalog.
+- **Native (Databricks) tables** - Data are loaded using the selected DBX Warehouse.
 
-| **Feature**             | **Description**                               |
-|-------------------------|-----------------------------------------------|
-| Generic UI Form         | Dynamic UI form for easy configuration.       |
-| Row-Based Configuration | Allows structuring the configuration in rows. |
-| OAuth                   | OAuth authentication enabled.                 |
-| Incremental Loading     | Fetch data in new increments.                 |
-| Backfill Mode           | Supports seamless backfill setup.             |
-| Date Range Filter       | Specify the date range for data retrieval.    |
 
-Supported Endpoints
-===================
+### Input Mapping
+Component can have mapped either one input table, or one or multiple parquet files with the same schema (not supported by the Native Databricks write mode).
 
-If you need additional endpoints, please submit your request to
-[ideas.keboola.com](https://ideas.keboola.com/).
+### Data Destination Options
+- **Load Type** Append, Overwrite, Upsert (supported only for native tables, using the PK from the input table), Raise error when existing (supported only for external table).
+- **Columns to partition by  [optional]** - List of columns to partition the table.
+- **Warehouse** DBX Warehouse to use for loading data (only for native tables).
+- **Batch size** - Bigger batch will increase speed but also can cause out-of-memory issues more likely.
+- **Preserve Insertion Order** - Disabling this option may help prevent out-of-memory issues.
 
-Configuration
-=============
 
-Param 1
--------
-Details about parameter 1.
-
-Param 2
--------
-Details about parameter 2.
-
-Output
-======
-
-Provides a list of tables, foreign keys, and schema.
-
-Development
------------
-
-To customize the local data folder path, replace the `CUSTOM_FOLDER` placeholder with your desired path in the `docker-compose.yml` file:
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    volumes:
-      - ./:/code
-      - ./CUSTOM_FOLDER:/data
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Clone this repository, initialize the workspace, and run the component using the following
-commands:
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-git clone https://github.com/keboola/component-delta-lake.git delta_lake
-cd delta_lake
-docker-compose build
-docker-compose run --rm dev
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Run the test suite and perform lint checks using this command:
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-docker-compose run --rm test
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Integration
-===========
-
-For details about deployment and integration with Keboola, refer to the
-[deployment section of the developer
-documentation](https://developers.keboola.com/extend/component/deployment/).
