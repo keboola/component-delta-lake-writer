@@ -304,8 +304,39 @@ class Component(ComponentBase):
             "max_retries": "2",
         }
 
+        # Unity Catalog access method takes precedence over provider setting
+        # This handles cases where provider might be set from previous config but access_method is unity_catalog
+        if self.params.access_method == "unity_catalog":
+            self._uc_client = WorkspaceClient(
+                host=self.params.unity_catalog_url, token=self.params.unity_catalog_token
+            )
+
+            temp_creds, region = self._get_temp_credentials_and_region()
+            uri = temp_creds.url
+
+            if temp_creds.azure_user_delegation_sas:
+                storage_options |= {
+                    "azure_storage_account_name": temp_creds.url.split("@")[1].split(".")[0],
+                    "azure_storage_sas_token": temp_creds.azure_user_delegation_sas.sas_token,
+                }
+            elif temp_creds.aws_temp_credentials:
+                storage_options |= {
+                    "aws_region": region,
+                    "aws_access_key_id": temp_creds.aws_temp_credentials.access_key_id,
+                    "aws_secret_access_key": temp_creds.aws_temp_credentials.secret_access_key,
+                    "aws_session_token": temp_creds.aws_temp_credentials.session_token,
+                }
+
+            return storage_options, uri
+
+        # Direct storage access - validate credentials before use
         match self.params.provider:
             case "abs":
+                if not self.params.abs_account_name or not self.params.abs_sas_token:
+                    raise UserException(
+                        "Azure Blob Storage credentials are missing. "
+                        "Please provide both 'Storage Account Name' and 'SAS token' for direct storage access."
+                    )
                 uri = f"az://{self.params.destination.container_name}/{self.params.destination.blob_name}"
                 storage_options |= {
                     "azure_storage_account_name": self.params.abs_account_name,
@@ -313,6 +344,11 @@ class Component(ComponentBase):
                 }
 
             case "s3":
+                if not self.params.aws_region or not self.params.aws_key_id or not self.params.aws_key_secret:
+                    raise UserException(
+                        "AWS S3 credentials are missing. Please provide 'AWS Region', 'Access key ID', "
+                        "and 'Secret Access Key' for direct storage access."
+                    )
                 uri = f"s3://{self.params.destination.container_name}/{self.params.destination.blob_name}"
                 storage_options |= {
                     "aws_region": self.params.aws_region,
@@ -321,32 +357,20 @@ class Component(ComponentBase):
                 }
 
             case "gcs":
+                if not self.params.gcp_service_account_key:
+                    raise UserException(
+                        "Google Cloud Storage credentials are missing. "
+                        "Please provide 'Service Account Key' for direct storage access."
+                    )
                 uri = f"gs://{self.params.destination.container_name}/{self.params.destination.blob_name}"
                 storage_options |= {"google_service_account_key": self.params.gcp_service_account_key}
 
             case _:
-                if not self.params.access_method == "unity_catalog":
-                    raise UserException(f"Unknown provider: {self.params.provider}")
-
-                self._uc_client = WorkspaceClient(
-                    host=self.params.unity_catalog_url, token=self.params.unity_catalog_token
+                raise UserException(
+                    f"Unknown or missing storage provider: '{self.params.provider}'. "
+                    "Please select a valid cloud storage provider "
+                    "(AWS S3, Azure Blob Storage, or Google Cloud Storage) or use Unity Catalog access method."
                 )
-
-                temp_creds, region = self._get_temp_credentials_and_region()
-                uri = temp_creds.url
-
-                if temp_creds.azure_user_delegation_sas:
-                    storage_options |= {
-                        "azure_storage_account_name": temp_creds.url.split("@")[1].split(".")[0],
-                        "azure_storage_sas_token": temp_creds.azure_user_delegation_sas.sas_token,
-                    }
-                elif temp_creds.aws_temp_credentials:
-                    storage_options |= {
-                        "aws_region": region,
-                        "aws_access_key_id": temp_creds.aws_temp_credentials.access_key_id,
-                        "aws_secret_access_key": temp_creds.aws_temp_credentials.secret_access_key,
-                        "aws_session_token": temp_creds.aws_temp_credentials.session_token,
-                    }
 
         return storage_options, uri
 
