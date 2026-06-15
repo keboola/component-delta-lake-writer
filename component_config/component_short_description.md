@@ -1,1 +1,1 @@
-Delta Tables are a type of data storage format that combines the benefits of data lakes and data warehouses.
+Writes data to Delta Lake tables.
