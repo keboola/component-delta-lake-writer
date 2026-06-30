@@ -1,3 +1,0 @@
-component
-configuration
-storage_api_client
