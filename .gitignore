@@ -1,6 +1,10 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+
+# Python packaging
+*.egg-info/
+*.egg
 .idea
 .vscode
 .DS_Store
