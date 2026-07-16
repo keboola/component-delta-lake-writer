@@ -32,14 +32,60 @@
         }
       }
     },
+    "auth_type": {
+      "enum": [
+        "pat",
+        "service_principal"
+      ],
+      "type": "string",
+      "title": "Authentication Type",
+      "default": "pat",
+      "options": {
+        "enum_titles": [
+          "Personal Access Token",
+          "Service Principal (OAuth M2M)"
+        ],
+        "dependencies": {
+          "access_method": "unity_catalog"
+        }
+      },
+      "description": "Choose how to authenticate to Unity Catalog.",
+      "propertyOrder": 3
+    },
     "#unity_catalog_token": {
       "type": "string",
       "title": "PAT token",
       "format": "password",
-      "propertyOrder": 3,
+      "propertyOrder": 4,
       "options": {
         "dependencies": {
-          "access_method": "unity_catalog"
+          "access_method": "unity_catalog",
+          "auth_type": "pat"
+        }
+      }
+    },
+    "unity_catalog_client_id": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "The service principal's Application (client) ID.",
+      "propertyOrder": 5,
+      "options": {
+        "dependencies": {
+          "access_method": "unity_catalog",
+          "auth_type": "service_principal"
+        }
+      }
+    },
+    "#unity_catalog_client_secret": {
+      "type": "string",
+      "title": "Client Secret",
+      "format": "password",
+      "description": "The service principal's OAuth secret.",
+      "propertyOrder": 6,
+      "options": {
+        "dependencies": {
+          "access_method": "unity_catalog",
+          "auth_type": "service_principal"
         }
       }
     },
@@ -64,12 +110,12 @@
       },
       "required": true,
       "description": "Select the cloud storage provider.",
-      "propertyOrder": 4
+      "propertyOrder": 7
     },
     "abs_account_name": {
       "type": "string",
       "title": "Storage Account Name",
-      "propertyOrder": 5,
+      "propertyOrder": 8,
       "options": {
         "dependencies": {
           "provider": "abs"
@@ -80,7 +126,7 @@
       "type": "string",
       "title": "SAS token",
       "format": "password",
-      "propertyOrder": 6,
+      "propertyOrder": 9,
       "options": {
         "dependencies": {
           "provider": "abs"
@@ -91,7 +137,7 @@
       "type": "string",
       "title": "AWS Region",
       "description": "The AWS region where the bucket is located for example 'eu-central-1' or 'us-east-1'.",
-      "propertyOrder": 7,
+      "propertyOrder": 10,
       "options": {
         "dependencies": {
           "provider": "s3"
@@ -101,7 +147,7 @@
     "aws_key_id": {
       "type": "string",
       "title": "Access key ID",
-      "propertyOrder": 8,
+      "propertyOrder": 11,
       "options": {
         "dependencies": {
           "provider": "s3"
@@ -112,7 +158,7 @@
       "type": "string",
       "title": "Secret Access Key",
       "format": "password",
-      "propertyOrder": 9,
+      "propertyOrder": 12,
       "options": {
         "dependencies": {
           "provider": "s3"
@@ -124,7 +170,7 @@
       "title": "Service Account Key",
       "description": "Copy & paste the whole JSON of the Google service account key file. For instructions on how to create the service account, see the <a href=\"https://help.keboola.com/components/writers/database/bigquery/#create-service-account\"> documentation.</a>",
       "format": "password",
-      "propertyOrder": 10,
+      "propertyOrder": 13,
       "options": {
         "dependencies": {
           "provider": "gcs"

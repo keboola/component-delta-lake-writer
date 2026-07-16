@@ -16,7 +16,7 @@ from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import SelectElement
 from storage_api_client import SAPIClient
 
-from configuration import Configuration
+from configuration import Configuration, AuthType
 
 DUCK_DB_DIR = os.path.join(os.environ.get("TMPDIR", "/tmp"), "duckdb")
 
@@ -30,6 +30,19 @@ class Component(ComponentBase):
         self.table = None
         self.stg_name = None
         self.uc_table_path = None
+
+    def _get_workspace_client(self) -> WorkspaceClient:
+        """
+        Returns a Databricks WorkspaceClient authenticated either with a personal access token (PAT)
+        or with service principal (OAuth M2M) credentials, depending on the selected auth type.
+        """
+        if self.params.auth_type == AuthType.service_principal:
+            return WorkspaceClient(
+                host=self.params.unity_catalog_url,
+                client_id=self.params.unity_catalog_client_id,
+                client_secret=self.params.unity_catalog_client_secret,
+            )
+        return WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
 
     def run(self):
         tables = self.get_input_tables_definitions(orphaned_manifests=True)
@@ -184,7 +197,7 @@ class Component(ComponentBase):
         if not self.params.destination.warehouse:
             raise UserException("Warehouse must be specified for native tables.")
 
-        self._uc_client = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
+        self._uc_client = self._get_workspace_client()
 
         # Create staging table
         self._execute_query(self._build_query_create_stage())
@@ -328,9 +341,7 @@ class Component(ComponentBase):
                 if not self.params.access_method == "unity_catalog":
                     raise UserException(f"Unknown provider: {self.params.provider}")
 
-                self._uc_client = WorkspaceClient(
-                    host=self.params.unity_catalog_url, token=self.params.unity_catalog_token
-                )
+                self._uc_client = self._get_workspace_client()
 
                 temp_creds, region = self._get_temp_credentials_and_region()
                 uri = temp_creds.url
@@ -385,25 +396,25 @@ class Component(ComponentBase):
 
     @sync_action("list_uc_catalogs")
     def list_uc_catalogs(self):
-        w = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
+        w = self._get_workspace_client()
         catalogs = w.catalogs.list()
         return [SelectElement(c.name) for c in catalogs]
 
     @sync_action("list_uc_schemas")
     def list_uc_schemas(self):
-        w = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
+        w = self._get_workspace_client()
         schemas = w.schemas.list(self.params.destination.catalog)
         return [SelectElement(s.name) for s in schemas]
 
     @sync_action("list_uc_tables")
     def list_uc_tables(self):
-        w = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
+        w = self._get_workspace_client()
         tables = w.tables.list(self.params.destination.catalog, self.params.destination.schema_name)
         return [SelectElement(t.name) for t in tables]
 
     @sync_action("list_warehouses")
     def list_dbx_warehouses(self):
-        uc_client = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
+        uc_client = self._get_workspace_client()
         warehouses = uc_client.warehouses.list()
         return [SelectElement(value=w.id, label=w.name) for w in warehouses]
 

@@ -8,6 +8,11 @@ class AccessMethod(str, Enum):
     direct_storage = "direct_storage"
 
 
+class AuthType(str, Enum):
+    pat = "pat"
+    service_principal = "service_principal"
+
+
 class TableType(str, Enum):
     external = "external"
     native = "native"
@@ -38,7 +43,10 @@ class Destination(BaseModel):
 class Configuration(BaseModel):
     access_method: AccessMethod = Field(default=AccessMethod.direct_storage)
     unity_catalog_url: str = ""
+    auth_type: AuthType = Field(default=AuthType.pat)
     unity_catalog_token: str = Field(alias="#unity_catalog_token", default="")
+    unity_catalog_client_id: str = ""
+    unity_catalog_client_secret: str = Field(alias="#unity_catalog_client_secret", default="")
     provider: str = ""
     abs_account_name: str = ""
     abs_sas_token: str = Field(alias="#abs_sas_token", default="")
