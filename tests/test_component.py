@@ -5,6 +5,7 @@ from types import SimpleNamespace as NS
 
 from freezegun import freeze_time
 
+from keboola.component.dao import ColumnDefinition
 from keboola.component.exceptions import UserException
 
 from component import Component
@@ -177,6 +178,18 @@ class TestComponent(unittest.TestCase):
             "sv=2017-11-09&sr=c&st=2026-07-16T12:50:12Z&se=2026-07-17T00:50:12Z"
             "&sp=rl&sig=Td2bBoGTGuBKDlBzng%2B2JHGzx%2BP34adli7LG%2FMg2CJY%3D",
         )
+
+    # --- base dtype resolution (typed vs non-typed input tables) -----------------------
+
+    def test_column_base_dtype_typed(self):
+        col = ColumnDefinition().from_dict({"name": "c", "data_type": {"base": {"type": "INTEGER"}}})
+        self.assertEqual(Component._column_base_dtype(col), "INTEGER")
+
+    def test_column_base_dtype_untyped_defaults_to_string(self):
+        # non-typed input table: manifest schema has no data_type -> data_types is empty
+        col = ColumnDefinition().from_dict({"name": "c", "primary_key": False})
+        self.assertEqual(col.data_types, {})
+        self.assertEqual(Component._column_base_dtype(col), "STRING")
 
     def test_abs_relative_path_variants(self):
         cases = [

@@ -82,7 +82,7 @@ class Component(ComponentBase):
 
         relation = None
         if tables:
-            dtypes = {key: value.data_types.get("base").dtype for key, value in self.table.schema.items()}
+            dtypes = {key: self._column_base_dtype(value) for key, value in self.table.schema.items()}
             staging_files = self.get_staging_files()
 
             relation = self._connection.sql(f"""
@@ -246,7 +246,7 @@ class Component(ComponentBase):
         cast_cols_upsert = {}
 
         for idx, (col_name, col_def) in enumerate(self.table.schema.items()):
-            dtype = col_def.data_types["base"].dtype
+            dtype = self._column_base_dtype(col_def)
             col_defs.append(f"{col_name} {dtype}")
             cast_cols.append(f"CAST(_c{idx} AS {dtype}) AS {col_name}")
             cast_cols_upsert[col_name] = f"CAST(source._c{idx} AS {dtype})"  # for upsert
@@ -376,6 +376,16 @@ class Component(ComponentBase):
             return url.split(marker, 1)[1]
         # Unknown scheme - strip a leading scheme:// if present and return the remainder.
         return url.split("://", 1)[-1]
+
+    @staticmethod
+    def _column_base_dtype(col_def, default="STRING"):
+        """
+        Returns the column's base data type, falling back to STRING for non-typed input tables
+        (whose manifest schema carries no `data_type`, so `data_types` is empty). This mirrors
+        Keboola's own default of treating untyped columns as STRING.
+        """
+        base = col_def.data_types.get("base") if col_def.data_types else None
+        return base.dtype if base else default
 
     @staticmethod
     def _parse_abs_connection_string(conn_str: str) -> tuple[str, str]:
