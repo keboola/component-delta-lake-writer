@@ -16,7 +16,7 @@ from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import SelectElement
 from storage_api_client import SAPIClient
 
-from configuration import Configuration
+from configuration import Configuration, AuthType
 
 DUCK_DB_DIR = os.path.join(os.environ.get("TMPDIR", "/tmp"), "duckdb")
 
@@ -30,6 +30,19 @@ class Component(ComponentBase):
         self.table = None
         self.stg_name = None
         self.uc_table_path = None
+
+    def _get_workspace_client(self) -> WorkspaceClient:
+        """
+        Returns a Databricks WorkspaceClient authenticated either with a personal access token (PAT)
+        or with service principal (OAuth M2M) credentials, depending on the selected auth type.
+        """
+        if self.params.auth_type == AuthType.service_principal:
+            return WorkspaceClient(
+                host=self.params.unity_catalog_url,
+                client_id=self.params.unity_catalog_client_id,
+                client_secret=self.params.unity_catalog_client_secret,
+            )
+        return WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
 
     def run(self):
         tables = self.get_input_tables_definitions(orphaned_manifests=True)
@@ -69,12 +82,12 @@ class Component(ComponentBase):
 
         relation = None
         if tables:
-            dtypes = {key: value.data_types.get("base").dtype for key, value in self.table.schema.items()}
-            s3_files = self.get_s3_paths()
+            dtypes = {key: self._column_base_dtype(value) for key, value in self.table.schema.items()}
+            staging_files = self.get_staging_files()
 
             relation = self._connection.sql(f"""
             SELECT *
-            FROM read_csv({s3_files}, column_names={self.table.column_names}, dtypes={dtypes})
+            FROM read_csv({staging_files}, column_names={self.table.column_names}, dtypes={dtypes})
             """)
         if files:
             files_paths = [file.full_path for file in files]
@@ -148,9 +161,14 @@ class Component(ComponentBase):
         self._execute_query(f"DROP TABLE IF EXISTS {self.stg_name};")
 
     def _build_query_load_stage(self):
-        s3_files = self.get_s3_paths()
-        dirname = os.path.dirname(s3_files[0])
-        filenames = [os.path.basename(f) for f in s3_files]
+        files = self.get_staging_files()
+        if self.table.abs_staging:
+            return self._build_abs_load_stage(files)
+        return self._build_s3_load_stage(files)
+
+    def _build_s3_load_stage(self, files):
+        dirname = os.path.dirname(files[0])
+        filenames = [os.path.basename(f) for f in files]
         quoted_filenames = [f"'{file}'" for file in filenames]
         files_str = ", ".join(quoted_filenames)
 
@@ -160,6 +178,36 @@ class Component(ComponentBase):
           CREDENTIAL (AWS_ACCESS_KEY = '{self.table.s3_staging.credentials_access_key_id}',
                       AWS_SECRET_KEY = '{self.table.s3_staging.credentials_secret_access_key}',
                       AWS_SESSION_TOKEN = '{self.table.s3_staging.credentials_session_token}')
+        )
+        FILEFORMAT = CSV
+        FILES = ({files_str})
+        FORMAT_OPTIONS (
+          'header' = 'false',
+          'inferSchema' = 'false',
+          'mergeSchema' = 'false'
+        );
+        """
+        return load_query
+
+    def _build_abs_load_stage(self, files):
+        abs_stg = self.table.abs_staging
+        account_name, sas_token = self._parse_abs_connection_string(abs_stg.credentials_sas_connection_string)
+        # get_staging_files returns DuckDB az://<container>/<path> URLs; Databricks COPY INTO needs
+        # the abfss:// form.
+        abfss_files = [
+            f"abfss://{abs_stg.container}@{account_name}.dfs.core.windows.net/"
+            f"{self._abs_relative_path(f, abs_stg.container)}"
+            for f in files
+        ]
+        dirname = os.path.dirname(abfss_files[0])
+        filenames = [os.path.basename(f) for f in abfss_files]
+        quoted_filenames = [f"'{file}'" for file in filenames]
+        files_str = ", ".join(quoted_filenames)
+
+        load_query = f"""
+        COPY INTO {self.stg_name}
+        FROM '{dirname}/' WITH (
+          CREDENTIAL (AZURE_SAS_TOKEN = '{sas_token}')
         )
         FILEFORMAT = CSV
         FILES = ({files_str})
@@ -184,7 +232,7 @@ class Component(ComponentBase):
         if not self.params.destination.warehouse:
             raise UserException("Warehouse must be specified for native tables.")
 
-        self._uc_client = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
+        self._uc_client = self._get_workspace_client()
 
         # Create staging table
         self._execute_query(self._build_query_create_stage())
@@ -198,7 +246,7 @@ class Component(ComponentBase):
         cast_cols_upsert = {}
 
         for idx, (col_name, col_def) in enumerate(self.table.schema.items()):
-            dtype = col_def.data_types["base"].dtype
+            dtype = self._column_base_dtype(col_def)
             col_defs.append(f"{col_name} {dtype}")
             cast_cols.append(f"CAST(_c{idx} AS {dtype}) AS {col_name}")
             cast_cols_upsert[col_name] = f"CAST(source._c{idx} AS {dtype})"  # for upsert
@@ -259,24 +307,98 @@ class Component(ComponentBase):
 
                 self._execute_query(merge_sql)
 
-    def get_s3_paths(self):
+    def get_staging_files(self):
+        """
+        Registers the cloud-storage secret in DuckDB and returns the list of staged CSV file URLs
+        (DuckDB-readable form) read from the Keboola input staging manifest.
+
+        Supports both S3 staging (AWS-backed stacks) and Azure Blob Storage staging (Azure-backed
+        stacks); the staging type is detected from the input table manifest at runtime.
+        """
+        if self.table.abs_staging:
+            return self._get_abs_staging_files()
+        if self.table.s3_staging:
+            return self._get_s3_staging_files()
+        raise UserException("Input table has no supported file staging (S3 or Azure Blob Storage).")
+
+    def _get_s3_staging_files(self):
+        s3 = self.table.s3_staging
         self._connection.execute(
             f"""
             CREATE OR REPLACE SECRET (
                 TYPE S3,
-                REGION '{self.table.s3_staging.region}',
-                KEY_ID '{self.table.s3_staging.credentials_access_key_id}',
-                SECRET '{self.table.s3_staging.credentials_secret_access_key}',
-                SESSION_TOKEN '{self.table.s3_staging.credentials_session_token}'
+                REGION '{s3.region}',
+                KEY_ID '{s3.credentials_access_key_id}',
+                SECRET '{s3.credentials_secret_access_key}',
+                SESSION_TOKEN '{s3.credentials_session_token}'
+            );
+            """
+        )
+        # read the manifest (list of dictionaries) and extract the table file urls
+        manifest = self._connection.sql(f"FROM read_json('s3://{s3.bucket}/{s3.key}')").fetchone()[0]
+        files = [f.get("url") for f in manifest]
+        return files
+
+    def _get_abs_staging_files(self):
+        abs_stg = self.table.abs_staging
+        # DuckDB's azure extension needs the curl transport when using a connection string secret.
+        self._connection.execute("SET azure_transport_option_type = 'curl';")
+        self._connection.execute(
+            f"""
+            CREATE OR REPLACE SECRET (
+                TYPE AZURE,
+                CONNECTION_STRING '{abs_stg.credentials_sas_connection_string}'
             );
             """
         )
         # read the manifest (list of dictionaries) and extract the table file urls
         manifest = self._connection.sql(
-            f"FROM read_json('s3://{self.table.s3_staging.bucket}/{self.table.s3_staging.key}')"
+            f"FROM read_json('az://{abs_stg.container}/{abs_stg.name}')"
         ).fetchone()[0]
-        files = [f.get("url") for f in manifest]
-        return files
+        # Normalize each slice URL to DuckDB's az://<container>/<path> form. The exact URL scheme
+        # Keboola writes into ABS slice manifests is not documented, so _abs_relative_path tolerates
+        # the variants where the container appears as a path segment (az://, azure://, https://).
+        # This path must be confirmed against a real Azure-backed stack run (see PR notes).
+        return [
+            f"az://{abs_stg.container}/{self._abs_relative_path(f.get('url'), abs_stg.container)}"
+            for f in manifest
+        ]
+
+    @staticmethod
+    def _abs_relative_path(url: str, container: str) -> str:
+        """
+        Returns the blob path relative to the container, for URL schemes where the container name
+        appears as a path segment (az://container/x, azure://acct.blob.../container/x,
+        https://acct.blob.../container/x).
+        """
+        marker = f"{container}/"
+        if marker in url:
+            return url.split(marker, 1)[1]
+        # Unknown scheme - strip a leading scheme:// if present and return the remainder.
+        return url.split("://", 1)[-1]
+
+    @staticmethod
+    def _column_base_dtype(col_def, default="STRING"):
+        """
+        Returns the column's base data type, falling back to STRING for non-typed input tables
+        (whose manifest schema carries no `data_type`, so `data_types` is empty). This mirrors
+        Keboola's own default of treating untyped columns as STRING.
+        """
+        base = col_def.data_types.get("base") if col_def.data_types else None
+        return base.dtype if base else default
+
+    @staticmethod
+    def _parse_abs_connection_string(conn_str: str) -> tuple[str, str]:
+        """
+        Parses Keboola's ABS `sas_connection_string` into (account_name, sas_token).
+
+        Format: 'BlobEndpoint=https://<account>.blob.core.windows.net;SharedAccessSignature=sv=...'
+        """
+        parts = dict(part.split("=", 1) for part in conn_str.split(";") if "=" in part)
+        blob_endpoint = parts.get("BlobEndpoint", "")
+        account_name = blob_endpoint.split("://", 1)[-1].split(".", 1)[0]
+        sas_token = parts.get("SharedAccessSignature", "")
+        return account_name, sas_token
 
     def _execute_query(self, query):
         to_log = re.sub(r"CREDENTIAL\s\(.+\)", "CREDENTIAL (--SENSITIVE--)", query, flags=re.DOTALL)
@@ -328,9 +450,7 @@ class Component(ComponentBase):
                 if not self.params.access_method == "unity_catalog":
                     raise UserException(f"Unknown provider: {self.params.provider}")
 
-                self._uc_client = WorkspaceClient(
-                    host=self.params.unity_catalog_url, token=self.params.unity_catalog_token
-                )
+                self._uc_client = self._get_workspace_client()
 
                 temp_creds, region = self._get_temp_credentials_and_region()
                 uri = temp_creds.url
@@ -385,25 +505,25 @@ class Component(ComponentBase):
 
     @sync_action("list_uc_catalogs")
     def list_uc_catalogs(self):
-        w = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
+        w = self._get_workspace_client()
         catalogs = w.catalogs.list()
         return [SelectElement(c.name) for c in catalogs]
 
     @sync_action("list_uc_schemas")
     def list_uc_schemas(self):
-        w = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
+        w = self._get_workspace_client()
         schemas = w.schemas.list(self.params.destination.catalog)
         return [SelectElement(s.name) for s in schemas]
 
     @sync_action("list_uc_tables")
     def list_uc_tables(self):
-        w = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
+        w = self._get_workspace_client()
         tables = w.tables.list(self.params.destination.catalog, self.params.destination.schema_name)
         return [SelectElement(t.name) for t in tables]
 
     @sync_action("list_warehouses")
     def list_dbx_warehouses(self):
-        uc_client = WorkspaceClient(host=self.params.unity_catalog_url, token=self.params.unity_catalog_token)
+        uc_client = self._get_workspace_client()
         warehouses = uc_client.warehouses.list()
         return [SelectElement(value=w.id, label=w.name) for w in warehouses]
 
