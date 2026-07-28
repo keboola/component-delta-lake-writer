@@ -473,15 +473,31 @@ class Component(ComponentBase):
     @staticmethod
     def write_batch(table_or_uri, data, mode, storage_options, writer_properties, partition_by=None, schema_mode=None):
         start = time.time()
-        write_deltalake(
-            table_or_uri=table_or_uri,
-            data=data,
-            mode=mode,
-            storage_options=storage_options,
-            writer_properties=writer_properties,
-            partition_by=partition_by,
-            schema_mode=schema_mode,
-        )
+        try:
+            write_deltalake(
+                table_or_uri=table_or_uri,
+                data=data,
+                mode=mode,
+                storage_options=storage_options,
+                writer_properties=writer_properties,
+                partition_by=partition_by,
+                schema_mode=schema_mode,
+            )
+        except OSError as e:
+            error_msg = str(e)
+            # Detect common authentication failures and provide actionable messages
+            if "NoAuthenticationInformation" in error_msg or "401" in error_msg:
+                raise UserException(
+                    f"Storage authentication failed. Please verify your credentials are valid and not expired. "
+                    f"Target: {table_or_uri}"
+                ) from e
+            if "403" in error_msg or "Forbidden" in error_msg:
+                raise UserException(
+                    f"Storage access denied. Please verify your credentials have the required permissions. "
+                    f"Target: {table_or_uri}"
+                ) from e
+            # Re-raise other OSErrors with context
+            raise UserException(f"Failed to write to Delta Lake: {error_msg}") from e
         logging.info(f"Batch written in {time.time() - start:.2f}s")
 
     def init_connection(self) -> DuckDBPyConnection:
