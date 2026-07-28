@@ -14,6 +14,6 @@ dependencies = [
     "keboola-http-client>=1.0.1",
     "keboola-utils>=1.1.0",
     "mock>=5.2.0",
-    "pyarrow>=21.0.0",
+    "pyarrow>=23.0.1",
     "pydantic>=2.11.7",
 ]
