@@ -1,1 +1,1 @@
-https://github.com/keboola/component-delta-lake.git/blob/master/README.md
+https://github.com/keboola/component-delta-lake-writer/blob/main/README.md

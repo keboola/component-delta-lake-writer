@@ -1,1 +1,1 @@
-https://github.com/keboola/component-delta-lake.git
+https://github.com/keboola/component-delta-lake-writer
