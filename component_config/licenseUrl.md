@@ -1,1 +1,1 @@
-https://github.com/keboola/component-delta-lake.git/blob/master/LICENSE.md
+https://github.com/keboola/component-delta-lake-writer/blob/main/LICENSE.md
